@@ -38,6 +38,7 @@ from transformers import (
     Wav2Vec2Processor,
     Data2Vec2MultiConfig,
     Data2Vec2MultiModel,
+    RobertaTokenizerFast,
 )
 UNK_TOKEN, UNK_TOKEN_ID = "<unk>", 3
 BOS_TOKEN, BOS_TOKEN_ID = "<s>", 0
@@ -93,6 +94,8 @@ def convert_data2vec2_checkpoint(args):
     state_dict = fairseq_ckpt["model"]
     fairseq_model_config = fairseq_ckpt["cfg"]["model"]
     model_config = {k: v for k, v in fairseq_model_config.items() if not "ema" in k and not "decoder" in k and not "loss" in k}
+    print(f'model_config["embed_dim"]: {model_config["embed_dim"]}')
+    model_config["hidden_size"] = model_config["embed_dim"]
 
     if args.vocab_dir is not None:
         # loading text model
@@ -107,18 +110,17 @@ def convert_data2vec2_checkpoint(args):
         model_config["modalities"]["text"]["vocab_size"] = len(task.source_dictionary)
         print(f"Vocab size: {len(task.source_dictionary)}")
 
-        tokenizer = ByteLevelBPETokenizer(
-            f"{args.vocab_dir}/{args.vocab_name}-vocab.json",
-            f"{args.vocab_dir}/{args.vocab_name}-merges.txt",
-            add_prefix_space=False,
-            unicode_normalizer="nfc",
-
-        )
-        tokenizer.add_special_tokens(SPECIAL_TOKENS)
-        model_config["unk_token_id"] = tokenizer.token_to_id(UNK_TOKEN)
-        model_config["bos_token_id"] = tokenizer.token_to_id(BOS_TOKEN)
-        model_config["eos_token_id"] = tokenizer.token_to_id(EOS_TOKEN)
-        model_config["pad_token_id"] = tokenizer.token_to_id(PAD_TOKEN)
+        # tokenizer = ByteLevelBPETokenizer(
+        #     f"{args.vocab_dir}/{args.vocab_name}-vocab.json",
+        #     f"{args.vocab_dir}/{args.vocab_name}-merges.txt",
+        #     add_prefix_space=False,
+        #     unicode_normalizer="nfc",
+        # )
+        # tokenizer.add_special_tokens(SPECIAL_TOKENS)
+        model_config["unk_token_id"] = UNK_TOKEN_ID
+        model_config["bos_token_id"] = BOS_TOKEN_ID
+        model_config["eos_token_id"] = EOS_TOKEN_ID
+        model_config["pad_token_id"] = PAD_TOKEN_ID
 
     # configuration
     configuration = Data2Vec2MultiConfig()
@@ -189,21 +191,26 @@ def test_converted_weights(args):
         )
         
         print(f"Comparing outputs for SAMPLE TEXT: {SAMPLE_TEXT}")
-        tokenizer = ByteLevelBPETokenizer(
-            f"{args.vocab_dir}/{args.vocab_name}-vocab.json",
-            f"{args.vocab_dir}/{args.vocab_name}-merges.txt",
-            add_prefix_space=False,
-            unicode_normalizer="nfc",
-        )
-        tokenizer.add_special_tokens(SPECIAL_TOKENS)
-        print(f'unk_token_id: {tokenizer.token_to_id(UNK_TOKEN)}')
-        print(f'bos_token_id: {tokenizer.token_to_id(BOS_TOKEN)}')
-        print(f'eos_token_id: {tokenizer.token_to_id(EOS_TOKEN)}')
-        print(f'pad_token_id: {tokenizer.token_to_id(PAD_TOKEN)}')
+        # tokenizer = ByteLevelBPETokenizer(
+        #     f"{args.vocab_dir}/{args.vocab_name}-vocab.json",
+        #     f"{args.vocab_dir}/{args.vocab_name}-merges.txt",
+        #     add_prefix_space=False,
+        #     unicode_normalizer="nfc",
+        # )
+        # tokenizer.add_special_tokens(SPECIAL_TOKENS)
+        # print(f'unk_token_id: {tokenizer.token_to_id(UNK_TOKEN)}')
+        # print(f'bos_token_id: {tokenizer.token_to_id(BOS_TOKEN)}')
+        # print(f'eos_token_id: {tokenizer.token_to_id(EOS_TOKEN)}')
+        # print(f'pad_token_id: {tokenizer.token_to_id(PAD_TOKEN)}')
 
-        encoded = tokenizer.encode(SAMPLE_TEXT)
-        encoded_ids = [BOS_TOKEN_ID] + encoded.ids # need to prepend BOS token <s>
-        print(f"encoded.ids: {encoded.ids}")
+        # encoded = tokenizer.encode(SAMPLE_TEXT)
+        # encoded_ids = [BOS_TOKEN_ID] + encoded.ids # need to prepend BOS token <s>
+        # print(f"encoded.ids: {encoded.ids}")
+
+        tokenizer = RobertaTokenizerFast.from_pretrained(
+            args.vocab_dir, add_prefix_space=False, unicode_normalizer="nfc"
+        )
+        encoded_ids = tokenizer(SAMPLE_TEXT)["input_ids"]
         input_values = torch.tensor(
             encoded_ids, dtype=torch.int64
         ).unsqueeze(0)

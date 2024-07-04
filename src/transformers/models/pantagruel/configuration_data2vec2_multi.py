@@ -285,7 +285,7 @@ class D2v2TextConfig(D2v2ModalityConfig):
     """
     def __init__(
         self,
-        vocab_size=49937,
+        vocab_size=50000,
         unk_token_id=3,
         bos_token_id=0,
         eos_token_id=2,
@@ -356,6 +356,7 @@ class Data2Vec2MultiConfig(MyPretrainedConfig):
 
     def __init__(
         self,
+        hidden_size=768,
         depth=12,
         start_drop_path_rate=0.0,
         end_drop_path_rate=0.0,
@@ -380,6 +381,7 @@ class Data2Vec2MultiConfig(MyPretrainedConfig):
     ):
         super().__init__(**kwargs)
 
+        self.hidden_size = hidden_size
         self.depth = depth
         self.start_drop_path_rate = start_drop_path_rate
         self.end_drop_path_rate = end_drop_path_rate
