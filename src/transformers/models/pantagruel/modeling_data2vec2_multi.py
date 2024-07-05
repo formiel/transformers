@@ -209,16 +209,19 @@ class Data2Vec2MultiModel(Data2Vec2MultiPreTrainedModel):
     
     def forward(
         self,
-        input_ids,
+        input_values=None, # audio input
+        input_ids=None, # text input
         attention_mask=None,
         mask=False,
         mode=None,
         output_hidden_states=True,
         return_dict=True,
     ):
+        if mode is None:
+            mode = "TEXT" if input_ids is not None else "AUDIO"
         feature_extractor = self.modality_encoders[mode]
         extractor_out = feature_extractor(
-            input_ids,
+            input_ids if input_ids is not None else input_values,
             attention_mask,
             mask,
             remove_masked=False,

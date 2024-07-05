@@ -50,7 +50,8 @@ input_values = torch.randn((3, 320000), dtype=torch.float32)
 with torch.no_grad():
     normalized_input_values = F.layer_norm(input_values, input_values.size()[1:])
 
-hf_output = hf_model(normalized_input_values, mode="AUDIO")
+# Forward pass
+hf_output = hf_model(input_values=normalized_input_values)
 extracted_features = hf_output.last_hidden_state
 
 # TEXT-ONLY MODEL
@@ -58,13 +59,15 @@ hf_model = Data2Vec2MultiModel.from_pretrained(text_model_dir)
 hf_model.eval()
 hf_model.freeze_feature_encoder()
 
+# Tokenize text
 SAMPLE_TEXT = "Bonjour le monde !!"
-
 tokenizer = RobertaTokenizerFast.from_pretrained(
            text_model_dir.as_posix(), add_prefix_space=False, unicode_normalizer="nfc"
         )
 encoded_ids = tokenizer(SAMPLE_TEXT)["input_ids"]
-input_values = torch.tensor(encoded_ids, dtype=torch.int64).unsqueeze(0)
-hf_output = hf_model(input_values, mode="TEXT")
+input_ids = torch.tensor(encoded_ids, dtype=torch.int64).unsqueeze(0)
+
+# Forward pass
+hf_output = hf_model(input_ids=input_ids)
 extracted_features = hf_output.last_hidden_state
 ```
