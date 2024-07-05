@@ -94,8 +94,6 @@ def convert_data2vec2_checkpoint(args):
     state_dict = fairseq_ckpt["model"]
     fairseq_model_config = fairseq_ckpt["cfg"]["model"]
     model_config = {k: v for k, v in fairseq_model_config.items() if not "ema" in k and not "decoder" in k and not "loss" in k}
-    print(f'model_config["embed_dim"]: {model_config["embed_dim"]}')
-    model_config["hidden_size"] = model_config["embed_dim"]
 
     if args.vocab_dir is not None:
         # loading text model

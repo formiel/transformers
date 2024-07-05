@@ -356,7 +356,6 @@ class Data2Vec2MultiConfig(MyPretrainedConfig):
 
     def __init__(
         self,
-        hidden_size=768,
         depth=12,
         start_drop_path_rate=0.0,
         end_drop_path_rate=0.0,
@@ -381,7 +380,6 @@ class Data2Vec2MultiConfig(MyPretrainedConfig):
     ):
         super().__init__(**kwargs)
 
-        self.hidden_size = hidden_size
         self.depth = depth
         self.start_drop_path_rate = start_drop_path_rate
         self.end_drop_path_rate = end_drop_path_rate
@@ -405,3 +403,9 @@ class Data2Vec2MultiConfig(MyPretrainedConfig):
 
         self.modalities = modalities
         self.supported_modality = supported_modality
+
+        # Attributes for hopsparser
+        self.hidden_size = embed_dim
+        self.num_layers = depth
+        self.n_layers = depth
+        self.num_hidden_layers = depth
