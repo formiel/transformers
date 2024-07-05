@@ -21,6 +21,7 @@ from tokenizers import ByteLevelBPETokenizer
 from transformers import (
     Data2Vec2MultiConfig,
     Data2Vec2MultiModel,
+    RobertaTokenizerFast,
 )
 UNK_TOKEN, UNK_TOKEN_ID = "<unk>", 3
 BOS_TOKEN, BOS_TOKEN_ID = "<s>", 0
@@ -59,16 +60,10 @@ hf_model.freeze_feature_encoder()
 
 SAMPLE_TEXT = "Bonjour le monde !!"
 
-tokenizer = ByteLevelBPETokenizer(
-    (text_model_dir / "bpe-bytelevel-vocab.json").as_posix(),
-    (text_model_dir / "bpe-bytelevel-merges.txt").as_posix(),
-    add_prefix_space=False,
-    unicode_normalizer="nfc")
-tokenizer.add_special_tokens(SPECIAL_TOKENS)
-
-encoded = tokenizer.encode(SAMPLE_TEXT)
-# prepend BOS token <s>
-encoded_ids = [tokenizer.token_to_id(BOS_TOKEN)] + encoded.ids
+tokenizer = RobertaTokenizerFast.from_pretrained(
+           text_model_dir.as_posix(), add_prefix_space=False, unicode_normalizer="nfc"
+        )
+encoded_ids = tokenizer(SAMPLE_TEXT)["input_ids"]
 input_values = torch.tensor(encoded_ids, dtype=torch.int64).unsqueeze(0)
 hf_output = hf_model(input_values, mode="TEXT")
 extracted_features = hf_output.last_hidden_state

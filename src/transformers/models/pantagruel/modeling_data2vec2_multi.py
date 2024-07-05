@@ -209,15 +209,17 @@ class Data2Vec2MultiModel(Data2Vec2MultiPreTrainedModel):
     
     def forward(
         self,
-        input_values,
-        padding_mask=None,
+        input_ids,
+        attention_mask=None,
         mask=False,
         mode=None,
+        output_hidden_states=True,
+        return_dict=True,
     ):
         feature_extractor = self.modality_encoders[mode]
         extractor_out = feature_extractor(
-            input_values,
-            padding_mask,
+            input_ids,
+            attention_mask,
             mask,
             remove_masked=False,
             clone_batch=1,
@@ -227,7 +229,7 @@ class Data2Vec2MultiModel(Data2Vec2MultiPreTrainedModel):
         x = extractor_out["x"]
         extract_features = x
 
-        encoder_mask = extractor_out["encoder_mask"]
+        # encoder_mask = extractor_out["encoder_mask"]
         masked_padding_mask = extractor_out["padding_mask"]
         masked_alibi_bias = extractor_out.get("alibi_bias", None)
         alibi_scale = extractor_out.get("alibi_scale", None)
@@ -267,9 +269,20 @@ class Data2Vec2MultiModel(Data2Vec2MultiPreTrainedModel):
                 :, feature_extractor.modality_cfg.num_extra_tokens :
             ]
 
+        if not return_dict:
+            return tuple(
+                v
+                for v in [
+                    x,
+                    extract_features,
+                    layer_results,
+                ]
+                if v is not None
+            )
+        
         return Wav2Vec2BaseModelOutput(
             last_hidden_state=x,
             extract_features=extract_features,
-            hidden_states=layer_results,
+            hidden_states=layer_results if output_hidden_states else None,
             attentions=None, # switch to manual implementation with fast=False in forward pass of AltAttention as pytorch's dspa does not output attention weights
         )
