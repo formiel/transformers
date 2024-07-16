@@ -212,6 +212,7 @@ class Data2Vec2MultiModel(Data2Vec2MultiPreTrainedModel):
         input_values=None, # audio input
         input_ids=None, # text input
         attention_mask=None,
+        padding_mask=None,
         mask=False,
         mode=None,
         output_hidden_states=True,
@@ -222,7 +223,7 @@ class Data2Vec2MultiModel(Data2Vec2MultiPreTrainedModel):
         feature_extractor = self.modality_encoders[mode]
         extractor_out = feature_extractor(
             input_ids if input_ids is not None else input_values,
-            attention_mask,
+            padding_mask,
             mask,
             remove_masked=False,
             clone_batch=1,
