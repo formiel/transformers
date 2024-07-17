@@ -1708,6 +1708,7 @@ else:
         [
             "Data2Vec2MultiPreTrainedModel",
             "Data2Vec2MultiModel",
+            "Data2VecForTokenClassification",
         ]
     )
     _import_structure["models.dbrx"].extend(

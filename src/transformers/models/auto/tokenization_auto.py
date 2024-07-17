@@ -150,6 +150,13 @@ else:
             ("ctrl", ("CTRLTokenizer", None)),
             ("data2vec-audio", ("Wav2Vec2CTCTokenizer", None)),
             ("data2vec-text", ("RobertaTokenizer", "RobertaTokenizerFast" if is_tokenizers_available() else None)),
+            (
+                "data2vec2-multi",
+                (
+                    "RobertaTokenizer" if is_sentencepiece_available() else None,
+                    "RobertaTokenizerFast" if is_tokenizers_available() else None,
+                ),
+            ),
             ("dbrx", ("GPT2Tokenizer", "GPT2TokenizerFast" if is_tokenizers_available() else None)),
             ("deberta", ("DebertaTokenizer", "DebertaTokenizerFast" if is_tokenizers_available() else None)),
             (

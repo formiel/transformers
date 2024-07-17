@@ -30,6 +30,7 @@ else:
     _import_structure["modeling_data2vec2_multi"] = [
         "Data2Vec2MultiPreTrainedModel",
         "Data2Vec2MultiModel",
+        "Data2VecForTokenClassification",
     ]
 
 
@@ -45,6 +46,7 @@ if TYPE_CHECKING:
         from .modeling_data2vec2_multi import (
             Data2Vec2MultiModel,
             Data2Vec2MultiPreTrainedModel,
+            Data2VecForTokenClassification,
         )
 else:
     import sys

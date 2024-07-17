@@ -1021,6 +1021,7 @@ MODEL_FOR_TOKEN_CLASSIFICATION_MAPPING_NAMES = OrderedDict(
         ("canine", "CanineForTokenClassification"),
         ("convbert", "ConvBertForTokenClassification"),
         ("data2vec-text", "Data2VecTextForTokenClassification"),
+        ("data2vec2-multi","Data2VecForTokenClassification"),
         ("deberta", "DebertaForTokenClassification"),
         ("deberta-v2", "DebertaV2ForTokenClassification"),
         ("distilbert", "DistilBertForTokenClassification"),

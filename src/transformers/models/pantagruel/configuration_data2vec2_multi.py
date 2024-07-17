@@ -127,58 +127,21 @@ class MyPretrainedConfig(PretrainedConfig):
         Returns:
             [`PretrainedConfig`]: The configuration object instantiated from those parameters.
         """
-        return_unused_kwargs = kwargs.pop("return_unused_kwargs", False)
-        # Those arguments may be passed along for our internal telemetry.
-        # We remove them so they don't appear in `return_unused_kwargs`.
-        kwargs.pop("_from_auto", None)
-        kwargs.pop("_from_pipeline", None)
-        # The commit hash might have been updated in the `config_dict`, we don't want the kwargs to erase that update.
-        if "_commit_hash" in kwargs and "_commit_hash" in config_dict:
-            kwargs["_commit_hash"] = config_dict["_commit_hash"]
-
-        # We remove it from kwargs so that it does not appear in `return_unused_kwargs`.
-        config_dict["attn_implementation"] = kwargs.pop("attn_implementation", None)
-
-        # config = cls(**config_dict)
+        config_tuple = super().from_dict(config_dict, **kwargs)
+        print(config_tuple)
+        if config_tuple is tuple:
+            config = config_tuple[0]
+            kwargs = config_tuple[1]
+        else:
+            config = config_tuple
+            kwargs = None
         # My updated config
-        config = cls()
         for key, value in config_dict.items():
             if not hasattr(config, key):
                 continue
             if isinstance(getattr(config, key), MyPretrainedConfig):
                 getattr(config, key).update(config_dict[key])
-            else:
-                setattr(config, key, value)
-
-
-        if hasattr(config, "pruned_heads"):
-            config.pruned_heads = {int(key): value for key, value in config.pruned_heads.items()}
-
-        # Update config with kwargs if needed
-        if "num_labels" in kwargs and "id2label" in kwargs:
-            num_labels = kwargs["num_labels"]
-            id2label = kwargs["id2label"] if kwargs["id2label"] is not None else []
-            if len(id2label) != num_labels:
-                raise ValueError(
-                    f"You passed along `num_labels={num_labels }` with an incompatible id to label map: "
-                    f"{kwargs['id2label']}. Since those arguments are inconsistent with each other, you should remove "
-                    "one of them."
-                )
-        to_remove = []
-        for key, value in kwargs.items():
-            if hasattr(config, key):
-                current_attr = getattr(config, key)
-                # To authorize passing a custom subconfig as kwarg in models that have nested configs.
-                if isinstance(current_attr, PretrainedConfig) and isinstance(value, dict):
-                    value = current_attr.__class__(**value)
-                setattr(config, key, value)
-                if key != "torch_dtype":
-                    to_remove.append(key)
-        for key in to_remove:
-            kwargs.pop(key, None)
-
-        logger.info(f"Model config {config}")
-        if return_unused_kwargs:
+        if kwargs is not None:
             return config, kwargs
         else:
             return config
@@ -401,7 +364,10 @@ class Data2Vec2MultiConfig(MyPretrainedConfig):
         self.clone_batch = clone_batch
         self.log_norms = log_norms
 
-        self.modalities = modalities
+        if isinstance(modalities, D2v2ModalitiesConfig):
+            self.modalities = modalities
+        else:
+            self.modalities = D2v2ModalitiesConfig()
         self.supported_modality = supported_modality
 
         # Attributes for hopsparser
