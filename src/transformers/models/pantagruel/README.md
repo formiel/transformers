@@ -3,10 +3,13 @@
 This folder contains codebase for loading and using the speech-only and text-only pre-trained models, which are based on [data2vec 2.0 architecture](https://arxiv.org/abs/2212.07525). The pre-trained models were trained using `fairseq` v1 library.
 
 ## Current models
-Current available pre-trained models are saved under the follwing directory: `/lus/work/CT10/lig3801/SHARED/pretrained_models`, including:
+Current available pre-trained models are saved under the following directory `/lustre/fsstor/projects/rech/oou/commun/pretrained_models`, including
 - `Speech_Base_fr_1K`: trained on around 1K hours of the French subset of Multilingual LibriSpeech corpus 
-- `Text_Base_fr_4GB_v0`: trained on around 5GB of text from French Wikipedia 2019 dump
+- `Speech_Large_fr_14K`: trained on 14K hours of LeBenchmark dataset
+- `Speech_Large_fr_14K_v1`: same as `Speech_Large_fr_14K` but used a different training settings for more epochs. Preliminary experiments on CommonVoice ASR show better performance than `Speech_Large_fr_14K`
 - `camembert-base-wikipedia-4gb`: trained on similar pre-training corpus as `Text_Base_fr_4GB_v0`.
+- `Text_Base_fr_4GB_v0`: trained on around 4GB of text from French Wikipedia 2019 dump, tokenizer was learned on the same pre-training data
+- `Text_Base_fr_4GB_v1`: trained on the same data as `Text_Base_fr_4GB_v0`, but tokenizer was learned on the subset french-30b of croissantLLM dataset. 
 
 The converted HuggingFace models are saved under sub-folder named `HuggingFace` in corresponding model-specific folders.
 
@@ -61,10 +64,17 @@ hf_model.freeze_feature_encoder()
 
 # Tokenize text
 SAMPLE_TEXT = "Bonjour le monde !!"
+## For Text_Base_fr_4GB_v0
 tokenizer = RobertaTokenizerFast.from_pretrained(
            text_model_dir.as_posix(), add_prefix_space=False, unicode_normalizer="nfc"
         )
 encoded_ids = tokenizer(SAMPLE_TEXT)["input_ids"]
+
+## For Text_Base_fr_4GB_v1
+from transformers import PreTrainedTokenizerFast
+tokenizer = PreTrainedTokenizerFast.from_pretrained(text_model_dir / "tokenizer_fast")
+encoded_ids = tokenizer.encode(SAMPLE_TEXT)
+
 input_ids = torch.tensor(encoded_ids, dtype=torch.int64).unsqueeze(0)
 
 # Forward pass

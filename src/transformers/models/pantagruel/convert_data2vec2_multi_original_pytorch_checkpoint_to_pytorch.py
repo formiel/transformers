@@ -30,7 +30,7 @@ from fairseq import utils
 from fairseq import checkpoint_utils
 
 from datasets import load_dataset
-from tokenizers import ByteLevelBPETokenizer
+from transformers import PreTrainedTokenizerFast
 
 import torch.nn.functional as F
 
@@ -205,10 +205,15 @@ def test_converted_weights(args):
         # encoded_ids = [BOS_TOKEN_ID] + encoded.ids # need to prepend BOS token <s>
         # print(f"encoded.ids: {encoded.ids}")
 
-        tokenizer = RobertaTokenizerFast.from_pretrained(
-            args.vocab_dir, add_prefix_space=False, unicode_normalizer="nfc"
-        )
-        encoded_ids = tokenizer(SAMPLE_TEXT)["input_ids"]
+        if not args.use_bpe:
+            tokenizer = RobertaTokenizerFast.from_pretrained(
+                args.vocab_dir, add_prefix_space=False, unicode_normalizer="nfc"
+            )
+            encoded_ids = tokenizer(SAMPLE_TEXT)["input_ids"]
+        else:
+            tokenizer = PreTrainedTokenizerFast.from_pretrained(args.vocab_dir)
+            encoded_ids = tokenizer.encode(SAMPLE_TEXT)
+        print(f'encoded_ids: {encoded_ids}')
         input_values = torch.tensor(
             encoded_ids, dtype=torch.int64
         ).unsqueeze(0)
@@ -251,6 +256,8 @@ if __name__ == "__main__":
     parser.add_argument("--vocab-name", default="bpe-bytelevel", type=str)
     parser.add_argument("--do_convert", action="store_true")
     parser.add_argument("--do_test", action="store_true")
+    parser.add_argument("--use_bpe", action="store_true",
+                        help="BPE tokenizer instead of ByteLevelBPE")
     args = parser.parse_args()
 
     if args.do_convert:
