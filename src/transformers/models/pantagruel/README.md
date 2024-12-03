@@ -81,3 +81,20 @@ input_ids = torch.tensor(encoded_ids, dtype=torch.int64).unsqueeze(0)
 hf_output = hf_model(input_ids=input_ids)
 extracted_features = hf_output.last_hidden_state
 ```
+
+Please note that the new tokenizer (for model `Text_Base_fr_4GB_v1`) does not automatically add BOS (`<s>`) and EOS (`</s>`) tokens when using with the `AutoTokenizer` class.
+```python
+>>> SAMPLE_TEXT = "Hello World !!" 
+>>> tok_old = AutoTokenizer.from_pretrained(root / "Text_Base_fr_4GB_v0" / "HuggingFace")
+>>> encoded_ids = tok_old.encode(SAMPLE_TEXT)
+>>> encoded_ids
+[0, 43726, 4065, 3475, 5, 2]
+
+>>> tok_new = AutoTokenizer.from_pretrained(root / "Text_Base_fr_4GB_v1" / "HuggingFace")
+>>> encoded_ids = tok_new.encode(SAMPLE_TEXT)
+>>> encoded_ids
+[121, 27145, 21903, 18950]
+>>> encoded_ids = tok_new.encode("<s>"+SAMPLE_TEXT+"</s>")
+>>> encoded_ids
+[0, 121, 27145, 21903, 18950, 2]
+```
