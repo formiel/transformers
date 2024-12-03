@@ -11,20 +11,47 @@ Current available pre-trained models are saved under the following directory `/l
 - `Text_Base_fr_4GB_v0`: trained on around 4GB of text from French Wikipedia 2019 dump, tokenizer was learned on the same pre-training data
 - `Text_Base_fr_4GB_v1`: trained on the same data as `Text_Base_fr_4GB_v0`, but tokenizer was learned on the subset french-30b of croissantLLM dataset. 
 
-The converted HuggingFace models are saved under sub-folder named `HuggingFace` in corresponding model-specific folders.
+The converted HuggingFace models are saved under the sub-folder named `HuggingFace` in each folder.
 
 
 ## Feature extraction
-To extract representations for a given audio or textual input, the pre-trained speech-only or text-only models can be used as follows:
+To extract representations for a given audio or textual input, the pre-trained speech-only or text-only models can be used as follows.
+
+### Speech-only model
 ```python
 from pathlib import Path
 import torch
 import torch.nn.functional as F
-from tokenizers import ByteLevelBPETokenizer
 from transformers import (
     Data2Vec2MultiConfig,
     Data2Vec2MultiModel,
-    RobertaTokenizerFast,
+)
+pretrained_dir = Path("/lus/work/CT10/lig3801/SHARED/pretrained_models")
+audio_model_dir = pretrained_dir / "Speech_Base_fr_1K" / "HuggingFace"
+
+# SPEECH-ONLY MODEL
+hf_model = Data2Vec2MultiModel.from_pretrained(audio_model_dir)
+hf_model.eval()
+hf_model.freeze_feature_encoder()
+
+# Important: normalized audio input signal for all speech-only models!
+input_values = torch.randn((3, 320000), dtype=torch.float32)
+with torch.no_grad():
+    normalized_input_values = F.layer_norm(input_values, input_values.size()[1:])
+
+# Forward pass
+hf_output = hf_model(input_values=normalized_input_values)
+extracted_features = hf_output.last_hidden_state
+```
+
+### Text-only model
+```python
+from pathlib import Path
+import torch
+import torch.nn.functional as F
+from transformers import (
+    Data2Vec2MultiConfig,
+    Data2Vec2MultiModel,
 )
 UNK_TOKEN, UNK_TOKEN_ID = "<unk>", 3
 BOS_TOKEN, BOS_TOKEN_ID = "<s>", 0
@@ -38,63 +65,50 @@ SPECIAL_TOKENS = [
             UNK_TOKEN,
             MASK_TOKEN,
         ]
-
 pretrained_dir = Path("/lus/work/CT10/lig3801/SHARED/pretrained_models")
-audio_model_dir = pretrained_dir / "Speech_Base_fr_1K" / "HuggingFace"
+# Tokenize text
+SAMPLE_TEXT = "Bonjour le monde !!"
+```
+
+For the `Text_Base_fr_4GB_v0`, the tokenizer is loaded as follows.
+```python
+## For Text_Base_fr_4GB_v0
 text_model_dir = pretrained_dir / "Text_Base_fr_4GB_v0" / "HuggingFace"
-
-# SPEECH-ONLY MODEL
-hf_model = Data2Vec2MultiModel.from_pretrained(audio_model_dir)
-hf_model.eval()
-hf_model.freeze_feature_encoder()
-
-# Important: normalized audio input signal
-input_values = torch.randn((3, 320000), dtype=torch.float32)
-with torch.no_grad():
-    normalized_input_values = F.layer_norm(input_values, input_values.size()[1:])
-
-# Forward pass
-hf_output = hf_model(input_values=normalized_input_values)
-extracted_features = hf_output.last_hidden_state
-
-# TEXT-ONLY MODEL
 hf_model = Data2Vec2MultiModel.from_pretrained(text_model_dir)
 hf_model.eval()
 hf_model.freeze_feature_encoder()
 
-# Tokenize text
-SAMPLE_TEXT = "Bonjour le monde !!"
-## For Text_Base_fr_4GB_v0
+from transformers import RobertaTokenizerFast
 tokenizer = RobertaTokenizerFast.from_pretrained(
            text_model_dir.as_posix(), add_prefix_space=False, unicode_normalizer="nfc"
         )
+# or use the AutoTokenizer
+tokenizer = AutoTokenizer.from_pretrained(text_model_dir)
 encoded_ids = tokenizer(SAMPLE_TEXT)["input_ids"]
 
-## For Text_Base_fr_4GB_v1
-from transformers import PreTrainedTokenizerFast
-tokenizer = PreTrainedTokenizerFast.from_pretrained(text_model_dir / "tokenizer_fast")
-encoded_ids = tokenizer.encode(SAMPLE_TEXT)
-
 input_ids = torch.tensor(encoded_ids, dtype=torch.int64).unsqueeze(0)
-
 # Forward pass
 hf_output = hf_model(input_ids=input_ids)
 extracted_features = hf_output.last_hidden_state
 ```
 
-Please note that the new tokenizer (for model `Text_Base_fr_4GB_v1`) does not automatically add BOS (`<s>`) and EOS (`</s>`) tokens when using with the `AutoTokenizer` class.
-```python
->>> SAMPLE_TEXT = "Hello World !!" 
->>> tok_old = AutoTokenizer.from_pretrained(root / "Text_Base_fr_4GB_v0" / "HuggingFace")
->>> encoded_ids = tok_old.encode(SAMPLE_TEXT)
->>> encoded_ids
-[0, 43726, 4065, 3475, 5, 2]
+For the `Text_Base_fr_4GB_v1`, the tokenizer is loaded as follows.
 
->>> tok_new = AutoTokenizer.from_pretrained(root / "Text_Base_fr_4GB_v1" / "HuggingFace")
->>> encoded_ids = tok_new.encode(SAMPLE_TEXT)
->>> encoded_ids
-[121, 27145, 21903, 18950]
->>> encoded_ids = tok_new.encode("<s>"+SAMPLE_TEXT+"</s>")
->>> encoded_ids
-[0, 121, 27145, 21903, 18950, 2]
+```python
+## For Text_Base_fr_4GB_v1
+text_model_dir = pretrained_dir / "Text_Base_fr_4GB_v1" / "HuggingFace"
+hf_model = Data2Vec2MultiModel.from_pretrained(text_model_dir)
+hf_model.eval()
+hf_model.freeze_feature_encoder()
+
+from transformers import PreTrainedTokenizerFast
+tokenizer = PreTrainedTokenizerFast.from_pretrained(text_model_dir)
+# or use the AutoTokenizer
+tokenizer = AutoTokenizer.from_pretrained(text_model_dir)
+
+encoded_ids = tokenizer.encode(SAMPLE_TEXT)
+input_ids = torch.tensor(encoded_ids, dtype=torch.int64).unsqueeze(0)
+# Forward pass
+hf_output = hf_model(input_ids=input_ids)
+extracted_features = hf_output.last_hidden_state
 ```
