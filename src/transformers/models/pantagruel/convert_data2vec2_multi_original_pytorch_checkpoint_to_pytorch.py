@@ -30,7 +30,7 @@ from fairseq import utils
 from fairseq import checkpoint_utils
 
 from datasets import load_dataset
-from transformers import PreTrainedTokenizerFast
+from transformers import AutoTokenizer
 
 import torch.nn.functional as F
 
@@ -53,7 +53,7 @@ SPECIAL_TOKENS = [
             MASK_TOKEN,
         ]
 
-FAIRSEQ = "/linkhome/rech/genlig01/umz16dj/code/fairspeech"
+FAIRSEQ = "/linkhome/rech/genlig01/umz16dj/code/h100_py310_cu1241_torch251/fairspeech"
 SAMPLE_TEXT = "Bonjour le monde !!"
 
 
@@ -115,10 +115,10 @@ def convert_data2vec2_checkpoint(args):
         #     unicode_normalizer="nfc",
         # )
         # tokenizer.add_special_tokens(SPECIAL_TOKENS)
-        model_config["unk_token_id"] = UNK_TOKEN_ID
-        model_config["bos_token_id"] = BOS_TOKEN_ID
-        model_config["eos_token_id"] = EOS_TOKEN_ID
-        model_config["pad_token_id"] = PAD_TOKEN_ID
+        # model_config["unk_token_id"] = UNK_TOKEN_ID
+        # model_config["bos_token_id"] = BOS_TOKEN_ID
+        # model_config["eos_token_id"] = EOS_TOKEN_ID
+        # model_config["pad_token_id"] = PAD_TOKEN_ID
 
     # configuration
     configuration = Data2Vec2MultiConfig()
@@ -211,7 +211,7 @@ def test_converted_weights(args):
             )
             encoded_ids = tokenizer(SAMPLE_TEXT)["input_ids"]
         else:
-            tokenizer = PreTrainedTokenizerFast.from_pretrained(args.vocab_dir)
+            tokenizer = AutoTokenizer.from_pretrained(args.vocab_dir)
             encoded_ids = tokenizer.encode(SAMPLE_TEXT)
         print(f'encoded_ids: {encoded_ids}')
         input_values = torch.tensor(
