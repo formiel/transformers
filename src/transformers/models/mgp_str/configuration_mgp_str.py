@@ -12,7 +12,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-""" MGP-STR model configuration"""
+"""MGP-STR model configuration"""
 
 from ...configuration_utils import PretrainedConfig
 from ...utils import logging
@@ -32,7 +32,7 @@ class MgpstrConfig(PretrainedConfig):
     documentation from [`PretrainedConfig`] for more information.
 
     Args:
-        image_size (`List[int]`, *optional*, defaults to `[32, 128]`):
+        image_size (`list[int]`, *optional*, defaults to `[32, 128]`):
             The size (resolution) of each image.
         patch_size (`int`, *optional*, defaults to 4):
             The size (resolution) of each patch.
@@ -132,3 +132,6 @@ class MgpstrConfig(PretrainedConfig):
         self.drop_path_rate = drop_path_rate
         self.output_a3_attentions = output_a3_attentions
         self.initializer_range = initializer_range
+
+
+__all__ = ["MgpstrConfig"]

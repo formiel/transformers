@@ -12,11 +12,13 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-""" MaskFormer model configuration"""
-from typing import Dict, Optional
+"""MaskFormer model configuration"""
+
+from typing import Optional
 
 from ...configuration_utils import PretrainedConfig
 from ...utils import logging
+from ...utils.backbone_utils import verify_backbone_config_arguments
 from ..auto import CONFIG_MAPPING
 from ..detr import DetrConfig
 from ..swin import SwinConfig
@@ -111,8 +113,8 @@ class MaskFormerConfig(PretrainedConfig):
         mask_feature_size: int = 256,
         no_object_weight: float = 0.1,
         use_auxiliary_loss: bool = False,
-        backbone_config: Optional[Dict] = None,
-        decoder_config: Optional[Dict] = None,
+        backbone_config: Optional[dict] = None,
+        decoder_config: Optional[dict] = None,
         init_std: float = 0.02,
         init_xavier_std: float = 1.0,
         dice_weight: float = 1.0,
@@ -122,23 +124,14 @@ class MaskFormerConfig(PretrainedConfig):
         backbone: Optional[str] = None,
         use_pretrained_backbone: bool = False,
         use_timm_backbone: bool = False,
-        backbone_kwargs: Optional[Dict] = None,
+        backbone_kwargs: Optional[dict] = None,
         **kwargs,
     ):
-        if use_pretrained_backbone:
-            raise ValueError("Pretrained backbones are not supported yet.")
-
-        if backbone_config is not None and backbone is not None:
-            raise ValueError("You can't specify both `backbone` and `backbone_config`.")
-
-        if backbone_kwargs is not None and backbone_kwargs and backbone_config is not None:
-            raise ValueError("You can't specify both `backbone_kwargs` and `backbone_config`.")
-
         if backbone_config is None and backbone is None:
             # fall back to https://huggingface.co/microsoft/swin-base-patch4-window12-384-in22k
             backbone_config = SwinConfig(
                 image_size=384,
-                in_channels=3,
+                num_channels=3,
                 patch_size=4,
                 embed_dim=128,
                 depths=[2, 2, 18, 2],
@@ -147,12 +140,18 @@ class MaskFormerConfig(PretrainedConfig):
                 drop_path_rate=0.3,
                 out_features=["stage1", "stage2", "stage3", "stage4"],
             )
-
-        if isinstance(backbone_config, dict):
+        elif isinstance(backbone_config, dict):
             backbone_model_type = backbone_config.pop("model_type")
             config_class = CONFIG_MAPPING[backbone_model_type]
             backbone_config = config_class.from_dict(backbone_config)
 
+        verify_backbone_config_arguments(
+            use_timm_backbone=use_timm_backbone,
+            use_pretrained_backbone=use_pretrained_backbone,
+            backbone=backbone,
+            backbone_config=backbone_config,
+            backbone_kwargs=backbone_kwargs,
+        )
         # verify that the backbone is supported
         if backbone_config is not None and backbone_config.model_type not in self.backbones_supported:
             logger.warning_once(
@@ -201,6 +200,15 @@ class MaskFormerConfig(PretrainedConfig):
         self.backbone_kwargs = backbone_kwargs
         super().__init__(**kwargs)
 
+    @property
+    def sub_configs(self):
+        sub_configs = {}
+        if self.backbone_config is not None and self.backbone_config != {}:
+            sub_configs["backbone_config"] = type(self.backbone_config)
+        if self.decoder_config is not None and self.decoder_config != {}:
+            sub_configs["decoder_config"] = type(self.decoder_config)
+        return sub_configs
+
     @classmethod
     def from_backbone_and_decoder_configs(
         cls, backbone_config: PretrainedConfig, decoder_config: PretrainedConfig, **kwargs
@@ -222,3 +230,6 @@ class MaskFormerConfig(PretrainedConfig):
             decoder_config=decoder_config,
             **kwargs,
         )
+
+
+__all__ = ["MaskFormerConfig"]

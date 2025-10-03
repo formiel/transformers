@@ -14,10 +14,9 @@
 # limitations under the License.
 """Tokenization classes for Salesforce CTRL."""
 
-
 import json
 import os
-from typing import Optional, Tuple
+from typing import Optional
 
 import regex as re
 
@@ -213,7 +212,7 @@ class CTRLTokenizer(PreTrainedTokenizer):
         out_string = " ".join(tokens).replace("@@ ", "").strip()
         return out_string
 
-    def save_vocabulary(self, save_directory: str, filename_prefix: Optional[str] = None) -> Tuple[str]:
+    def save_vocabulary(self, save_directory: str, filename_prefix: Optional[str] = None) -> tuple[str]:
         if not os.path.isdir(save_directory):
             logger.error(f"Vocabulary path ({save_directory}) should be a directory")
             return
@@ -247,3 +246,6 @@ class CTRLTokenizer(PreTrainedTokenizer):
     #     tokens_generated_so_far = re.sub('(@@ )', '', string=filtered_tokens)
     #     tokens_generated_so_far = re.sub('(@@ ?$)', '', string=tokens_generated_so_far)
     #     return ''.join(tokens_generated_so_far)
+
+
+__all__ = ["CTRLTokenizer"]

@@ -12,8 +12,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-""" UDOP model configuration"""
-
+"""UDOP model configuration"""
 
 from ...configuration_utils import PretrainedConfig
 from ...utils import logging
@@ -53,7 +52,7 @@ class UdopConfig(PretrainedConfig):
             The number of buckets to use for each attention layer.
         relative_attention_max_distance (`int`, *optional*, defaults to 128):
             The maximum distance of the longer sequences for the bucket separation.
-        relative_bias_args (`List[dict]`, *optional*, defaults to `[{'type': '1d'}, {'type': 'horizontal'}, {'type': 'vertical'}]`):
+        relative_bias_args (`list[dict]`, *optional*, defaults to `[{'type': '1d'}, {'type': 'horizontal'}, {'type': 'vertical'}]`):
             A list of dictionaries containing the arguments for the relative bias layers.
         dropout_rate (`float`, *optional*, defaults to 0.1):
             The ratio for all dropout layers.
@@ -136,7 +135,7 @@ class UdopConfig(PretrainedConfig):
         self.patch_size = patch_size
         self.num_channels = num_channels
         if not isinstance(relative_bias_args, list):
-            raise ValueError("`relative_bias_args` should be a list of dictionaries.")
+            raise TypeError("`relative_bias_args` should be a list of dictionaries.")
         self.relative_bias_args = relative_bias_args
 
         act_info = self.feed_forward_proj.split("-")
@@ -156,3 +155,6 @@ class UdopConfig(PretrainedConfig):
             is_encoder_decoder=is_encoder_decoder,
             **kwargs,
         )
+
+
+__all__ = ["UdopConfig"]

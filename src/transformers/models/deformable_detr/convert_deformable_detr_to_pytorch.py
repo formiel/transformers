@@ -14,14 +14,13 @@
 # limitations under the License.
 """Convert Deformable DETR checkpoints."""
 
-
 import argparse
 import json
 from pathlib import Path
 
 import requests
 import torch
-from huggingface_hub import cached_download, hf_hub_url
+from huggingface_hub import hf_hub_download
 from PIL import Image
 
 from transformers import DeformableDetrConfig, DeformableDetrForObjectDetection, DeformableDetrImageProcessor
@@ -110,7 +109,7 @@ def convert_deformable_detr_checkpoint(
     config.num_labels = 91
     repo_id = "huggingface/label-files"
     filename = "coco-detection-id2label.json"
-    id2label = json.load(open(cached_download(hf_hub_url(repo_id, filename, repo_type="dataset")), "r"))
+    id2label = json.loads(Path(hf_hub_download(repo_id, filename, repo_type="dataset")).read_text())
     id2label = {int(k): v for k, v in id2label.items()}
     config.id2label = id2label
     config.label2id = {v: k for k, v in id2label.items()}
@@ -126,16 +125,16 @@ def convert_deformable_detr_checkpoint(
     logger.info("Converting model...")
 
     # load original state dict
-    state_dict = torch.load(checkpoint_path, map_location="cpu")["model"]
+    state_dict = torch.load(checkpoint_path, map_location="cpu", weights_only=True)["model"]
     # rename keys
-    for key in state_dict.copy().keys():
+    for key in state_dict.copy():
         val = state_dict.pop(key)
         state_dict[rename_key(key)] = val
     # query, key and value matrices need special treatment
     read_in_q_k_v(state_dict)
     # important: we need to prepend a prefix to each of the base model keys as the head models use different attributes for them
     prefix = "model."
-    for key in state_dict.copy().keys():
+    for key in state_dict.copy():
         if not key.startswith("class_embed") and not key.startswith("bbox_embed"):
             val = state_dict.pop(key)
             state_dict[prefix + key] = val

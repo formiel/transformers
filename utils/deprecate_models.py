@@ -9,7 +9,7 @@ import argparse
 import os
 from collections import defaultdict
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Optional
 
 import requests
 from custom_init_isort import sort_imports_in_all_inits
@@ -31,13 +31,13 @@ def get_last_stable_minor_release():
     url = "https://pypi.org/pypi/transformers/json"
     release_data = requests.get(url).json()
 
-    # Find the last stable release of of transformers (version below current version)
+    # Find the last stable release of transformers (version below current version)
     major_version, minor_version, patch_version, _ = current_version.split(".")
     last_major_minor = f"{major_version}.{int(minor_version) - 1}"
     last_stable_minor_releases = [
         release for release in release_data["releases"] if release.startswith(last_major_minor)
     ]
-    last_stable_release = sorted(last_stable_minor_releases, key=version.parse)[-1]
+    last_stable_release = max(last_stable_minor_releases, key=version.parse)
 
     return last_stable_release
 
@@ -45,14 +45,14 @@ def get_last_stable_minor_release():
 def build_tip_message(last_stable_release):
     return (
         """
-    <Tip warning={true}>
+<Tip warning={true}>
 
-    This model is in maintenance mode only, we don't accept any new PRs changing its code.
-    """
+This model is in maintenance mode only, we don't accept any new PRs changing its code.
+"""
         + f"""If you run into any issues running this model, please reinstall the last version that supported this model: v{last_stable_release}.
-    You can do so by running the following command: `pip install -U transformers=={last_stable_release}`.
+You can do so by running the following command: `pip install -U transformers=={last_stable_release}`.
 
-    </Tip>"""
+</Tip>"""
     )
 
 
@@ -77,19 +77,15 @@ def insert_tip_to_model_doc(model_doc_path, tip_message):
         f.write("\n".join(new_model_lines))
 
 
-def get_model_doc_path(model: str) -> Tuple[Optional[str], Optional[str]]:
+def get_model_doc_path(model: str) -> tuple[Optional[str], Optional[str]]:
     # Possible variants of the model name in the model doc path
-    model_doc_paths = [
-        REPO_PATH / f"docs/source/en/model_doc/{model}.md",
-        # Try replacing _ with - in the model name
-        REPO_PATH / f"docs/source/en/model_doc/{model.replace('_', '-')}.md",
-        # Try replacing _ with "" in the model name
-        REPO_PATH / f"docs/source/en/model_doc/{model.replace('_', '')}.md",
-    ]
+    model_names = [model, model.replace("_", "-"), model.replace("_", "")]
 
-    for model_doc_path in model_doc_paths:
+    model_doc_paths = [REPO_PATH / f"docs/source/en/model_doc/{model_name}.md" for model_name in model_names]
+
+    for model_doc_path, model_name in zip(model_doc_paths, model_names):
         if os.path.exists(model_doc_path):
-            return model_doc_path, model
+            return model_doc_path, model_name
 
     return None, None
 
@@ -126,6 +122,25 @@ def update_relative_imports(filename, model):
 
     with open(filename, "w") as f:
         f.write("\n".join(new_file_lines))
+
+
+def remove_copied_from_statements(model):
+    model_path = REPO_PATH / f"src/transformers/models/{model}"
+    for file in os.listdir(model_path):
+        if file == "__pycache__":
+            continue
+        file_path = model_path / file
+        with open(file_path, "r") as f:
+            file_lines = f.read()
+
+        new_file_lines = []
+        for line in file_lines.split("\n"):
+            if "# Copied from" in line:
+                continue
+            new_file_lines.append(line)
+
+        with open(file_path, "w") as f:
+            f.write("\n".join(new_file_lines))
 
 
 def move_model_files_to_deprecated(model):
@@ -168,7 +183,8 @@ def update_main_init_file(models):
 
     # 1. For each model, find all the instances of model.model_name and replace with model.deprecated.model_name
     for model in models:
-        init_file = init_file.replace(f"models.{model}", f"models.deprecated.{model}")
+        init_file = init_file.replace(f'models.{model}"', f'models.deprecated.{model}"')
+        init_file = init_file.replace(f"models.{model} import", f"models.deprecated.{model} import")
 
     with open(filename, "w") as f:
         f.write(init_file)
@@ -186,6 +202,7 @@ def remove_model_references_from_file(filename, models, condition):
         models (List[str]): The models to remove
         condition (Callable): A function that takes the line and model and returns True if the line should be removed
     """
+    filename = REPO_PATH / filename
     with open(filename, "r") as f:
         init_file = f.read()
 
@@ -268,14 +285,14 @@ def add_models_to_deprecated_models_in_config_auto(models):
         elif in_deprecated_models and line.strip() == "]":
             in_deprecated_models = False
             # Add the new models to deprecated models list
-            deprecated_models_list.extend([f'"{model},"' for model in models])
+            deprecated_models_list.extend([f'    "{model}", ' for model in models])
             # Sort so they're in alphabetical order in the file
             deprecated_models_list = sorted(deprecated_models_list)
             new_file_lines.extend(deprecated_models_list)
             # Make sure we still have the closing bracket
             new_file_lines.append(line)
         elif in_deprecated_models:
-            deprecated_models_list.append(line.strip())
+            deprecated_models_list.append(line)
         else:
             new_file_lines.append(line)
 
@@ -323,7 +340,11 @@ def deprecate_models(models):
         print("Adding tip message to model doc page")
         insert_tip_to_model_doc(model_info["model_doc_path"], tip_message)
 
-        # Move the model file to deprecated: src/transfomers/models/model -> src/transformers/models/deprecated/model
+        # Remove #Copied from statements from model's files
+        print("Removing #Copied from statements from model's files")
+        remove_copied_from_statements(model)
+
+        # Move the model file to deprecated: src/transformers/models/model -> src/transformers/models/deprecated/model
         print("Moving model files to deprecated for model")
         move_model_files_to_deprecated(model)
 

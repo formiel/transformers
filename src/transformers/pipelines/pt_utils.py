@@ -31,7 +31,7 @@ class PipelineIterator(IterableDataset):
         ```
 
                 Arguments:
-                    loader (`torch.utils.data.DataLoader` or any iterator):
+                    loader (`torch.utils.data.DataLoader` or `Iterable`):
                         The iterator that will be used to apply `infer` on.
                     infer (any function):
                         The function to apply of each element of `loader`.
@@ -86,12 +86,14 @@ class PipelineIterator(IterableDataset):
                     elif isinstance(element[0], np.ndarray):
                         loader_batched[k] = tuple(np.expand_dims(el[self._loader_batch_index], 0) for el in element)
                     continue
-                if k in {"hidden_states", "past_key_values", "attentions"} and isinstance(element, tuple):
+                if k in {"hidden_states", "attentions"} and isinstance(element, tuple):
                     # Those are stored as lists of tensors so need specific unbatching.
                     if isinstance(element[0], torch.Tensor):
                         loader_batched[k] = tuple(el[self._loader_batch_index].unsqueeze(0) for el in element)
                     elif isinstance(element[0], np.ndarray):
                         loader_batched[k] = tuple(np.expand_dims(el[self._loader_batch_index], 0) for el in element)
+                    continue
+                if k == "past_key_values":
                     continue
                 if element is None:
                     # This can happen for optional data that get passed around
@@ -163,7 +165,7 @@ class PipelineChunkIterator(PipelineIterator):
         ```
 
                 Arguments:
-                    loader (`torch.utils.data.DataLoader` or any iterator):
+                    loader (`torch.utils.data.DataLoader` or `Iterable`):
                         The iterator that will be used to apply `infer` on.
                     infer (any function):
                         The function to apply of each element of `loader`.
@@ -185,7 +187,7 @@ class PipelineChunkIterator(PipelineIterator):
             # Try to return next item
             processed = next(self.subiterator)
         except StopIteration:
-            # When a preprocess iterator ends, we can start lookig at the next item
+            # When a preprocess iterator ends, we can start looking at the next item
             # ChunkIterator will keep feeding until ALL elements of iterator
             # all have created their subiterator and have been iterating against.
             #
@@ -224,7 +226,7 @@ class PipelinePackIterator(PipelineIterator):
     ```
 
         Arguments:
-            loader (`torch.utils.data.DataLoader` or any iterator):
+            loader (`torch.utils.data.DataLoader` or `Iterable`):
                 The iterator that will be used to apply `infer` on.
             infer (any function):
                 The function to apply of each element of `loader`.

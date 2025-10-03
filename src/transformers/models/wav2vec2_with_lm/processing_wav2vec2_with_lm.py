@@ -15,12 +15,14 @@
 """
 Speech processor class for Wav2Vec2
 """
+
 import os
 import warnings
+from collections.abc import Iterable
 from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass
 from multiprocessing import Pool, get_context, get_start_method
-from typing import TYPE_CHECKING, Dict, Iterable, List, Optional, Union
+from typing import TYPE_CHECKING, Optional, Union
 
 import numpy as np
 
@@ -38,7 +40,7 @@ if TYPE_CHECKING:
     from ...tokenization_utils import PreTrainedTokenizerBase
 
 
-ListOfDict = List[Dict[str, Union[int, str]]]
+ListOfDict = list[dict[str, Union[int, str]]]
 
 
 @dataclass
@@ -53,15 +55,15 @@ class Wav2Vec2DecoderWithLMOutput(ModelOutput):
             Total logit score of the beams associated with produced text.
         lm_score (list of `float`):
             Fused lm_score of the beams associated with produced text.
-        word_offsets (list of `List[Dict[str, Union[int, str]]]` or `List[Dict[str, Union[int, str]]]`):
+        word_offsets (list of `list[dict[str, Union[int, str]]]` or `list[dict[str, Union[int, str]]]`):
             Offsets of the decoded words. In combination with sampling rate and model downsampling rate word offsets
             can be used to compute time stamps for each word.
     """
 
-    text: Union[List[List[str]], List[str], str]
-    logit_score: Union[List[List[float]], List[float], float] = None
-    lm_score: Union[List[List[float]], List[float], float] = None
-    word_offsets: Union[List[List[ListOfDict]], List[ListOfDict], ListOfDict] = None
+    text: Union[list[list[str]], list[str], str]
+    logit_score: Union[list[list[float]], list[float], float] = None
+    lm_score: Union[list[list[float]], list[float], float] = None
+    word_offsets: Union[list[list[ListOfDict]], list[ListOfDict], ListOfDict] = None
 
 
 class Wav2Vec2ProcessorWithLM(ProcessorMixin):
@@ -70,15 +72,15 @@ class Wav2Vec2ProcessorWithLM(ProcessorMixin):
     with language model support into a single processor for language model boosted speech recognition decoding.
 
     Args:
-        feature_extractor ([`Wav2Vec2FeatureExtractor`]):
-            An instance of [`Wav2Vec2FeatureExtractor`]. The feature extractor is a required input.
+        feature_extractor ([`Wav2Vec2FeatureExtractor`] or [`SeamlessM4TFeatureExtractor`]):
+            An instance of [`Wav2Vec2FeatureExtractor`] or [`SeamlessM4TFeatureExtractor`]. The feature extractor is a required input.
         tokenizer ([`Wav2Vec2CTCTokenizer`]):
             An instance of [`Wav2Vec2CTCTokenizer`]. The tokenizer is a required input.
         decoder (`pyctcdecode.BeamSearchDecoderCTC`):
             An instance of [`pyctcdecode.BeamSearchDecoderCTC`]. The decoder is a required input.
     """
 
-    feature_extractor_class = "Wav2Vec2FeatureExtractor"
+    feature_extractor_class = "AutoFeatureExtractor"
     tokenizer_class = "Wav2Vec2CTCTokenizer"
 
     def __init__(
@@ -91,7 +93,12 @@ class Wav2Vec2ProcessorWithLM(ProcessorMixin):
 
         super().__init__(feature_extractor, tokenizer)
         if not isinstance(decoder, BeamSearchDecoderCTC):
-            raise ValueError(f"`decoder` has to be of type {BeamSearchDecoderCTC.__class__}, but is {type(decoder)}")
+            raise TypeError(f"`decoder` has to be of type {BeamSearchDecoderCTC.__class__}, but is {type(decoder)}")
+
+        if feature_extractor.__class__.__name__ not in ["Wav2Vec2FeatureExtractor", "SeamlessM4TFeatureExtractor"]:
+            raise ValueError(
+                f"`feature_extractor` has to be of type `Wav2Vec2FeatureExtractor` or `SeamlessM4TFeatureExtractor`, but is {type(feature_extractor)}"
+            )
 
         # make sure that decoder's alphabet and tokenizer's vocab match in content
         missing_decoder_tokens = self.get_missing_alphabet_tokens(decoder, tokenizer)
@@ -117,7 +124,7 @@ class Wav2Vec2ProcessorWithLM(ProcessorMixin):
 
         <Tip>
 
-        This class method is simply calling Wav2Vec2FeatureExtractor's
+        This class method is simply calling the feature extractor's
         [`~feature_extraction_utils.FeatureExtractionMixin.from_pretrained`], Wav2Vec2CTCTokenizer's
         [`~tokenization_utils_base.PreTrainedTokenizerBase.from_pretrained`], and
         [`pyctcdecode.BeamSearchDecoderCTC.load_from_hf_hub`].
@@ -146,7 +153,8 @@ class Wav2Vec2ProcessorWithLM(ProcessorMixin):
         feature_extractor, tokenizer = super()._get_arguments_from_pretrained(pretrained_model_name_or_path, **kwargs)
 
         if os.path.isdir(pretrained_model_name_or_path) or os.path.isfile(pretrained_model_name_or_path):
-            decoder = BeamSearchDecoderCTC.load_from_dir(pretrained_model_name_or_path)
+            unigram_encoding = kwargs.get("unigram_encoding", "utf-8")
+            decoder = BeamSearchDecoderCTC.load_from_dir(pretrained_model_name_or_path, unigram_encoding)
         else:
             # BeamSearchDecoderCTC has no auto class
             kwargs.pop("_from_auto", None)
@@ -213,8 +221,8 @@ class Wav2Vec2ProcessorWithLM(ProcessorMixin):
 
     def __call__(self, *args, **kwargs):
         """
-        When used in normal mode, this method forwards all its arguments to Wav2Vec2FeatureExtractor's
-        [`~Wav2Vec2FeatureExtractor.__call__`] and returns its output. If used in the context
+        When used in normal mode, this method forwards all its arguments to the feature extractor's
+        [`~FeatureExtractionMixin.__call__`] and returns its output. If used in the context
         [`~Wav2Vec2ProcessorWithLM.as_target_processor`] this method forwards all its arguments to
         Wav2Vec2CTCTokenizer's [`~Wav2Vec2CTCTokenizer.__call__`]. Please refer to the docstring of the above two
         methods for more information.
@@ -252,8 +260,8 @@ class Wav2Vec2ProcessorWithLM(ProcessorMixin):
 
     def pad(self, *args, **kwargs):
         """
-        When used in normal mode, this method forwards all its arguments to Wav2Vec2FeatureExtractor's
-        [`~Wav2Vec2FeatureExtractor.pad`] and returns its output. If used in the context
+        When used in normal mode, this method forwards all its arguments to the feature extractor's
+        [`~FeatureExtractionMixin.pad`] and returns its output. If used in the context
         [`~Wav2Vec2ProcessorWithLM.as_target_processor`] this method forwards all its arguments to
         Wav2Vec2CTCTokenizer's [`~Wav2Vec2CTCTokenizer.pad`]. Please refer to the docstring of the above two methods
         for more information.
@@ -336,7 +344,7 @@ class Wav2Vec2ProcessorWithLM(ProcessorMixin):
             token_min_logp (`int`, *optional*):
                 Tokens below this logp are skipped unless they are argmax of frame Defaults to pyctcdecode's
                 DEFAULT_MIN_TOKEN_LOGP.
-            hotwords (`List[str]`, *optional*):
+            hotwords (`list[str]`, *optional*):
                 List of words with extra importance, can be OOV for LM
             hotword_weight (`int`, *optional*):
                 Weight factor for hotword importance Defaults to pyctcdecode's DEFAULT_HOTWORD_WEIGHT.
@@ -495,7 +503,7 @@ class Wav2Vec2ProcessorWithLM(ProcessorMixin):
             token_min_logp (`int`, *optional*):
                 Tokens with log-probs below token_min_logp are skipped unless they are have the maximum log-prob for an
                 utterance. Defaults to pyctcdecode's DEFAULT_MIN_TOKEN_LOGP.
-            hotwords (`List[str]`, *optional*):
+            hotwords (`list[str]`, *optional*):
                 List of words with extra importance which can be missing from the LM's vocabulary, e.g. ["huggingface"]
             hotword_weight (`int`, *optional*):
                 Weight multiplier that boosts hotword scores. Defaults to pyctcdecode's DEFAULT_HOTWORD_WEIGHT.
@@ -646,3 +654,6 @@ class Wav2Vec2ProcessorWithLM(ProcessorMixin):
         yield
         self.current_processor = self.feature_extractor
         self._in_target_context_manager = False
+
+
+__all__ = ["Wav2Vec2ProcessorWithLM"]

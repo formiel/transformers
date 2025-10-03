@@ -1,4 +1,3 @@
-# coding=utf-8
 # Copyright 2022 The HuggingFace Inc. team. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,12 +11,26 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-""" Finetuning any 🤗 Transformers model supported by AutoModelForSemanticSegmentation for semantic segmentation."""
+
+# /// script
+# dependencies = [
+#     "transformers @ git+https://github.com/huggingface/transformers.git",
+#     "datasets >= 2.0.0",
+#     "torch >= 1.3",
+#     "accelerate",
+#     "evaluate""
+#     "Pillow",
+#     "albumentations >= 1.4.16",
+# ]
+# ///
+
+"""Finetuning any 🤗 Transformers model supported by AutoModelForSemanticSegmentation for semantic segmentation."""
 
 import argparse
 import json
 import math
 import os
+import warnings
 from functools import partial
 from pathlib import Path
 
@@ -44,12 +57,12 @@ from transformers import (
     default_data_collator,
     get_scheduler,
 )
-from transformers.utils import check_min_version, send_example_telemetry
+from transformers.utils import check_min_version
 from transformers.utils.versions import require_version
 
 
 # Will error if the minimal version of Transformers is not installed. Remove at your own risks.
-check_min_version("4.41.0.dev0")
+check_min_version("4.57.0.dev0")
 
 logger = get_logger(__name__)
 
@@ -84,6 +97,11 @@ def parse_args():
         type=str,
         help="Name of the dataset on the hub.",
         default="segments/sidewalk-semantic",
+    )
+    parser.add_argument(
+        "--do_reduce_labels",
+        action="store_true",
+        help="Whether or not to reduce all labels by 1 and replace background by 255.",
     )
     parser.add_argument(
         "--reduce_labels",
@@ -174,12 +192,11 @@ def parse_args():
     parser.add_argument("--hub_token", type=str, help="The token to use to push to the Model Hub.")
     parser.add_argument(
         "--trust_remote_code",
-        type=bool,
-        default=False,
+        action="store_true",
         help=(
-            "Whether or not to allow for custom models defined on the Hub in their own modeling files. This option "
-            "should only be set to `True` for repositories you trust and in which you have read the code, as it will "
-            "execute code present on the Hub on your local machine."
+            "Whether to trust the execution of code from datasets/models defined on the Hub."
+            " This option should only be set to `True` for repositories you trust and in which you have read the"
+            " code, as it will execute code present on the Hub on your local machine."
         ),
     )
     parser.add_argument(
@@ -219,6 +236,14 @@ def parse_args():
                 "Need an `output_dir` to create a repo when `--push_to_hub` or `with_tracking` is specified."
             )
 
+    # Deprecation
+    if args.reduce_labels:
+        args.do_reduce_labels = args.reduce_labels
+        warnings.warn(
+            "The `reduce_labels` argument is deprecated and will be removed in v4.45. Please use `do_reduce_labels` instead.",
+            FutureWarning,
+        )
+
     if args.output_dir is not None:
         os.makedirs(args.output_dir, exist_ok=True)
 
@@ -227,10 +252,6 @@ def parse_args():
 
 def main():
     args = parse_args()
-
-    # Sending telemetry. Tracking the example usage helps us better allocate resources to maintain them. The
-    # information sent is the one passed as arguments along with your Python/PyTorch versions.
-    send_example_telemetry("run_semantic_segmentation_no_trainer", args)
 
     # Initialize the accelerator. We will let the accelerator handle device placement for us in this example.
     # If we're using tracking, we also need to initialize it here and it will by default pick up all supported trackers
@@ -280,7 +301,7 @@ def main():
     # In distributed training, the load_dataset function guarantees that only one local process can concurrently
     # download the dataset.
     # TODO support datasets from local folders
-    dataset = load_dataset(args.dataset_name, cache_dir=args.cache_dir)
+    dataset = load_dataset(args.dataset_name, cache_dir=args.cache_dir, trust_remote_code=args.trust_remote_code)
 
     # Rename column names to standardized names (only "image" and "label" need to be present)
     if "pixel_values" in dataset["train"].column_names:
@@ -289,7 +310,7 @@ def main():
         dataset = dataset.rename_columns({"annotation": "label"})
 
     # If we don't have a validation split, split off a percentage of train as validation.
-    args.train_val_split = None if "validation" in dataset.keys() else args.train_val_split
+    args.train_val_split = None if "validation" in dataset else args.train_val_split
     if isinstance(args.train_val_split, float) and args.train_val_split > 0.0:
         split = dataset["train"].train_test_split(args.train_val_split)
         dataset["train"] = split["train"]
@@ -303,7 +324,7 @@ def main():
     else:
         repo_id = args.dataset_name
         filename = "id2label.json"
-    id2label = json.load(open(hf_hub_download(repo_id, filename, repo_type="dataset"), "r"))
+    id2label = json.load(open(hf_hub_download(repo_id, filename, repo_type="dataset")))
     id2label = {int(k): v for k, v in id2label.items()}
     label2id = {v: k for k, v in id2label.items()}
 
@@ -312,14 +333,13 @@ def main():
         args.model_name_or_path, id2label=id2label, label2id=label2id, trust_remote_code=args.trust_remote_code
     )
     image_processor = AutoImageProcessor.from_pretrained(
-        args.model_name_or_path, trust_remote_code=args.trust_remote_code
+        args.model_name_or_path, trust_remote_code=args.trust_remote_code, do_reduce_labels=args.do_reduce_labels
     )
     model = AutoModelForSemanticSegmentation.from_pretrained(
-        args.model_name_or_path, config=config, trust_remote_code=args.trust_remote_code
+        args.model_name_or_path,
+        config=config,
+        trust_remote_code=args.trust_remote_code,
     )
-    # `reduce_labels` is a property of dataset labels, in case we use image_processor
-    # pretrained on another dataset we should override the default setting
-    image_processor.do_reduce_labels = args.reduce_labels
 
     # Define transforms to be applied to each image and target.
     if "shortest_edge" in image_processor.size:
@@ -329,7 +349,7 @@ def main():
         height, width = image_processor.size["height"], image_processor.size["width"]
     train_transforms = A.Compose(
         [
-            A.Lambda(name="reduce_labels", mask=reduce_labels_transform if args.reduce_labels else None, p=1.0),
+            A.Lambda(name="reduce_labels", mask=reduce_labels_transform if args.do_reduce_labels else None, p=1.0),
             # pad image with 255, because it is ignored by loss
             A.PadIfNeeded(min_height=height, min_width=width, border_mode=0, value=255, p=1.0),
             A.RandomCrop(height=height, width=width, p=1.0),
@@ -340,7 +360,7 @@ def main():
     )
     val_transforms = A.Compose(
         [
-            A.Lambda(name="reduce_labels", mask=reduce_labels_transform if args.reduce_labels else None, p=1.0),
+            A.Lambda(name="reduce_labels", mask=reduce_labels_transform if args.do_reduce_labels else None, p=1.0),
             A.Resize(height=height, width=width, p=1.0),
             A.Normalize(mean=image_processor.image_mean, std=image_processor.image_std, max_pixel_value=255.0, p=1.0),
             ToTensorV2(),
@@ -503,7 +523,7 @@ def main():
                 completed_steps += 1
 
             if isinstance(checkpointing_steps, int):
-                if completed_steps % checkpointing_steps == 0:
+                if completed_steps % checkpointing_steps == 0 and accelerator.sync_gradients:
                     output_dir = f"step_{completed_steps}"
                     if args.output_dir is not None:
                         output_dir = os.path.join(args.output_dir, output_dir)
@@ -590,9 +610,6 @@ def main():
                 output_dir = os.path.join(args.output_dir, output_dir)
             accelerator.save_state(output_dir)
 
-    if args.with_tracking:
-        accelerator.end_training()
-
     if args.output_dir is not None:
         accelerator.wait_for_everyone()
         unwrapped_model = accelerator.unwrap_model(model)
@@ -615,6 +632,9 @@ def main():
             }
             with open(os.path.join(args.output_dir, "all_results.json"), "w") as f:
                 json.dump(all_results, f, indent=2)
+
+    accelerator.wait_for_everyone()
+    accelerator.end_training()
 
 
 if __name__ == "__main__":

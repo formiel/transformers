@@ -14,8 +14,7 @@
 # limitations under the License.
 """Tokenization classes for OpenAI GPT."""
 
-
-from typing import List, Optional, Tuple
+from typing import Optional
 
 from tokenizers import pre_tokenizers
 
@@ -82,7 +81,7 @@ class CLIPTokenizerFast(PreTrainedTokenizerFast):
         )
 
         if not isinstance(self.backend_tokenizer.pre_tokenizer, pre_tokenizers.Sequence):
-            raise ValueError(
+            raise TypeError(
                 "The `backend_tokenizer` provided does not match the expected format. The CLIP tokenizer has been"
                 " heavily modified from transformers version 4.17.0. You need to convert the tokenizer you are using"
                 " to be compatible with this version.The easiest way to do so is"
@@ -90,23 +89,26 @@ class CLIPTokenizerFast(PreTrainedTokenizerFast):
                 " to use your existing tokenizer, you will have to revert to a version prior to 4.17.0 of"
                 " transformers."
             )
-
         self._wrap_decode_method_backend_tokenizer()
 
     # Very ugly hack to enable padding to have a correct decoding see https://github.com/huggingface/tokenizers/issues/872
     def _wrap_decode_method_backend_tokenizer(self):
         orig_decode_method = self.backend_tokenizer.decode
 
+        ## define this as a local variable to avoid circular reference
+        ## See: https://github.com/huggingface/transformers/issues/30930
+        end_of_word_suffix = self.backend_tokenizer.model.end_of_word_suffix
+
         def new_decode_method(*args, **kwargs):
             text = orig_decode_method(*args, **kwargs)
-            text = text.replace(self.backend_tokenizer.model.end_of_word_suffix, " ").strip()
+            text = text.replace(end_of_word_suffix, " ").strip()
             return text
 
         self.backend_tokenizer.decode = new_decode_method
 
     def build_inputs_with_special_tokens(
-        self, token_ids_0: List[int], token_ids_1: Optional[List[int]] = None
-    ) -> List[int]:
+        self, token_ids_0: list[int], token_ids_1: Optional[list[int]] = None
+    ) -> list[int]:
         """
         Build model inputs from a sequence or a pair of sequence for sequence classification tasks by concatenating and
         adding special tokens. A CLIP sequence has the following format:
@@ -116,13 +118,13 @@ class CLIPTokenizerFast(PreTrainedTokenizerFast):
         Pairs of sequences are not the expected use case, but they will be handled without a separator.
 
         Args:
-            token_ids_0 (`List[int]`):
+            token_ids_0 (`list[int]`):
                 List of IDs to which the special tokens will be added.
-            token_ids_1 (`List[int]`, *optional*):
+            token_ids_1 (`list[int]`, *optional*):
                 Optional second list of IDs for sequence pairs.
 
         Returns:
-            `List[int]`: List of [input IDs](../glossary#input-ids) with the appropriate special tokens.
+            `list[int]`: List of [input IDs](../glossary#input-ids) with the appropriate special tokens.
         """
         bos_token = [self.bos_token_id]
         eos_token = [self.eos_token_id]
@@ -132,20 +134,20 @@ class CLIPTokenizerFast(PreTrainedTokenizerFast):
         return bos_token + token_ids_0 + eos_token + eos_token + token_ids_1 + eos_token
 
     def create_token_type_ids_from_sequences(
-        self, token_ids_0: List[int], token_ids_1: Optional[List[int]] = None
-    ) -> List[int]:
+        self, token_ids_0: list[int], token_ids_1: Optional[list[int]] = None
+    ) -> list[int]:
         """
         Create a mask from the two sequences passed. CLIP does not make use of token type ids, therefore a list of
         zeros is returned.
 
         Args:
-            token_ids_0 (`List[int]`):
+            token_ids_0 (`list[int]`):
                 List of IDs.
-            token_ids_1 (`List[int]`, *optional*):
+            token_ids_1 (`list[int]`, *optional*):
                 Optional second list of IDs for sequence pairs.
 
         Returns:
-            `List[int]`: List of zeros.
+            `list[int]`: List of zeros.
         """
         bos_token = [self.bos_token_id]
         eos_token = [self.eos_token_id]
@@ -154,6 +156,9 @@ class CLIPTokenizerFast(PreTrainedTokenizerFast):
             return len(bos_token + token_ids_0 + eos_token) * [0]
         return len(bos_token + token_ids_0 + eos_token + eos_token + token_ids_1 + eos_token) * [0]
 
-    def save_vocabulary(self, save_directory: str, filename_prefix: Optional[str] = None) -> Tuple[str]:
+    def save_vocabulary(self, save_directory: str, filename_prefix: Optional[str] = None) -> tuple[str]:
         files = self._tokenizer.model.save(save_directory, name=filename_prefix)
         return tuple(files)
+
+
+__all__ = ["CLIPTokenizerFast"]

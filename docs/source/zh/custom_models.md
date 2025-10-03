@@ -39,7 +39,7 @@ class ResnetConfig(PretrainedConfig):
     def __init__(
         self,
         block_type="bottleneck",
-        layers: List[int] = [3, 4, 6, 3],
+        layers: list[int] = [3, 4, 6, 3],
         num_classes: int = 1000,
         input_channels: int = 3,
         cardinality: int = 1,
@@ -154,7 +154,7 @@ class ResnetModelForImageClassification(PreTrainedModel):
     def forward(self, tensor, labels=None):
         logits = self.model(tensor)
         if labels is not None:
-            loss = torch.nn.cross_entropy(logits, labels)
+            loss = torch.nn.functional.cross_entropy(logits, labels)
             return {"loss": loss, "logits": logits}
         return {"logits": logits}
 ```
@@ -246,7 +246,7 @@ resnet50d.model.load_state_dict(pretrained_model.state_dict())
 现在要将模型推送到集线器，请确保你已登录。你看可以在终端中运行以下命令：
 
 ```bash
-huggingface-cli login
+hf auth login
 ```
 
 或者在笔记本中运行以下代码：

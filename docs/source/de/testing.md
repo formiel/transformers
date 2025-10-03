@@ -185,16 +185,16 @@ pytest -k "test and ada" tests/test_optimization.py
 
 Manchmal müssen Sie `accelerate` Tests für Ihre Modelle ausführen. Dazu fügen Sie einfach `-m accelerate_tests` zu Ihrem Befehl hinzu, wenn Sie diese Tests bei einem `OPT`-Lauf ausführen möchten:
 ```bash
-RUN_SLOW=1 pytest -m accelerate_tests tests/models/opt/test_modeling_opt.py 
+RUN_SLOW=1 pytest -m accelerate_tests tests/models/opt/test_modeling_opt.py
 ```
 
 
-### Dokumentationstests ausführen 
+### Dokumentationstests ausführen
 
-Um zu testen, ob die Dokumentationsbeispiele korrekt sind, sollten Sie überprüfen, ob die `doctests` erfolgreich sind. 
-Lassen Sie uns als Beispiel den docstring von [WhisperModel.forward](https://github.com/huggingface/transformers/blob/main/src/transformers/models/whisper/modeling_whisper.py#L1017-L1035) verwenden: 
+Um zu testen, ob die Dokumentationsbeispiele korrekt sind, sollten Sie überprüfen, ob die `doctests` erfolgreich sind.
+Lassen Sie uns als Beispiel den docstring von [WhisperModel.forward](https://github.com/huggingface/transformers/blob/main/src/transformers/models/whisper/modeling_whisper.py#L1017-L1035) verwenden:
 
-```python 
+```python
 r"""
 Returns:
 
@@ -217,8 +217,8 @@ Example:
 
 ```
 
-Führen Sie einfach die folgende Zeile aus, um automatisch jedes docstring-Beispiel in der gewünschten Datei zu testen: 
-```bash 
+Führen Sie einfach die folgende Zeile aus, um automatisch jedes docstring-Beispiel in der gewünschten Datei zu testen:
+```bash
 pytest --doctest-modules <path_to_file_or_dir>
 ```
 Wenn die Datei eine Markdown-Erweiterung hat, sollten Sie das Argument `--doctest-glob="*.md"` hinzufügen.
@@ -471,13 +471,6 @@ Hier ist zum Beispiel ein Test, der nur ausgeführt werden muss, wenn 2 oder meh
 ```python no-style
 @require_torch_multi_gpu
 def test_example_with_multi_gpu():
-```
-
-Wenn ein Test `tensorflow` benötigt, verwenden Sie den Dekorator `require_tf`. Zum Beispiel:
-
-```python no-style
-@require_tf
-def test_tf_thing_with_tensorflow():
 ```
 
 Diese Dekors können gestapelt werden. Wenn zum Beispiel ein Test langsam ist und mindestens eine GPU unter pytorch benötigt, können Sie
@@ -862,7 +855,7 @@ Code, der fehlerhaft ist, einen schlechten Zustand verursacht, der sich auf ande
 - Hier sehen Sie, wie Sie einen ganzen Test bedingungslos überspringen können:
 
 ```python no-style
-@unittest.skip("this bug needs to be fixed")
+@unittest.skip(reason="this bug needs to be fixed")
 def test_feature_x():
 ```
 
@@ -1204,9 +1197,6 @@ if torch.cuda.is_available():
 import numpy as np
 
 np.random.seed(seed)
-
-# tf RNG
-tf.random.set_seed(seed)
 ```
 
 ### Tests debuggen

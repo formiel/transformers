@@ -13,9 +13,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """Tokenization classes for FastSpeech2Conformer."""
+
 import json
 import os
-from typing import Optional, Tuple
+from typing import Optional
 
 import regex
 
@@ -142,7 +143,7 @@ class FastSpeech2ConformerTokenizer(PreTrainedTokenizer):
         )
         return tokens
 
-    def save_vocabulary(self, save_directory: str, filename_prefix: Optional[str] = None) -> Tuple[str]:
+    def save_vocabulary(self, save_directory: str, filename_prefix: Optional[str] = None) -> tuple[str]:
         """
         Save the vocabulary and special tokens file to a directory.
 
@@ -182,3 +183,6 @@ class FastSpeech2ConformerTokenizer(PreTrainedTokenizer):
                 "You need to install g2p-en to use FastSpeech2ConformerTokenizer. "
                 "See https://pypi.org/project/g2p-en/ for installation."
             )
+
+
+__all__ = ["FastSpeech2ConformerTokenizer"]

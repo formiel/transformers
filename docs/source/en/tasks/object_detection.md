@@ -121,6 +121,7 @@ To get familiar with the data, explore what the examples look like.
 ```
 
 The examples in the dataset have the following fields:
+
 - `image_id`: the example image id
 - `image`: a `PIL.Image.Image` object containing the image
 - `width`: width of the image
@@ -146,7 +147,7 @@ To get an even better understanding of the data, visualize an example in the dat
 >>> annotations = cppe5["train"][2]["objects"]
 >>> draw = ImageDraw.Draw(image)
 
->>> categories = cppe5["train"].features["objects"].feature["category"].names
+>>> categories = cppe5["train"].features["objects"]["category"].feature.names
 
 >>> id2label = {index: x for index, x in enumerate(categories, start=0)}
 >>> label2id = {v: k for k, v in id2label.items()}
@@ -171,10 +172,10 @@ To get an even better understanding of the data, visualize an example in the dat
 
 >>> image
 ```
+
 <div class="flex justify-center">
     <img src="https://i.imgur.com/oVQb9SF.png" alt="CPPE-5 Image Example"/>
 </div>
-
 
 To visualize the bounding boxes with associated labels, you can get the labels from the dataset's metadata, specifically
 the `category` field.
@@ -204,37 +205,29 @@ Instantiate the image processor from the same checkpoint as the model you want t
 ```py
 >>> from transformers import AutoImageProcessor
 
+>>> MAX_SIZE = IMAGE_SIZE
+
 >>> image_processor = AutoImageProcessor.from_pretrained(
 ...     MODEL_NAME,
-...     # At this moment we recommend using external transform to pad and resize images.
-...     # It`s faster and yields better results for object-detection models.
-...     do_pad=False,
-...     do_resize=False,
+...     do_resize=True,
+...     size={"max_height": MAX_SIZE, "max_width": MAX_SIZE},
+...     do_pad=True,
+...     pad_size={"height": MAX_SIZE, "width": MAX_SIZE},
 ... )
 ```
 
 Before passing the images to the `image_processor`, apply two preprocessing transformations to the dataset:
+
 - Augmenting images
 - Reformatting annotations to meet DETR expectations
 
-First, to make sure the model does not overfit on the training data, you can apply image augmentation with any data augmentation library. Here we use [Albumentations](https://albumentations.ai/docs/) ...
+First, to make sure the model does not overfit on the training data, you can apply image augmentation with any data augmentation library. Here we use [Albumentations](https://albumentations.ai/docs/).
 This library ensures that transformations affect the image and update the bounding boxes accordingly.
 The 🤗 Datasets library documentation has a detailed [guide on how to augment images for object detection](https://huggingface.co/docs/datasets/object_detection),
-and it uses the exact same dataset as an example. Apply the same approach here, resize each image to (480, 480),
-flip it horizontally, and brighten it. For additional augmentation options, explore the [Albumentations Demo Space](https://huggingface.co/spaces/qubvel-hf/albumentations-demo).
+and it uses the exact same dataset as an example. Apply some geometric and color transformations to the image. For additional augmentation options, explore the [Albumentations Demo Space](https://huggingface.co/spaces/qubvel-hf/albumentations-demo).
 
 ```py
 >>> import albumentations as A
-
->>> max_size = IMAGE_SIZE
-
->>> # Resize image longest edge to 480 and then pad image to square 480x480.
->>> # This padding and resizing strategy give better results, see
->>> # https://github.com/huggingface/transformers/pull/30422#discussion_r1584647408
->>> basic_transforms = [
-...     A.LongestMaxSize(max_size=max_size),
-...     A.PadIfNeeded(max_size, max_size, border_mode=0, value=(128, 128, 128), position="top_left"),
-... ]
 
 >>> train_augment_and_transform = A.Compose(
 ...     [
@@ -242,18 +235,17 @@ flip it horizontally, and brighten it. For additional augmentation options, expl
 ...         A.HorizontalFlip(p=0.5),
 ...         A.RandomBrightnessContrast(p=0.5),
 ...         A.HueSaturationValue(p=0.1),
-...         *basic_transforms,
 ...     ],
 ...     bbox_params=A.BboxParams(format="coco", label_fields=["category"], clip=True, min_area=25),
 ... )
 
 >>> validation_transform = A.Compose(
-...     basic_transforms,
+...     [A.NoOp()],
 ...     bbox_params=A.BboxParams(format="coco", label_fields=["category"], clip=True),
 ... )
 ```
 
-The `image_processor` expects the annotations to be in the following format: `{'image_id': int, 'annotations': List[Dict]}`,
+The `image_processor` expects the annotations to be in the following format: `{'image_id': int, 'annotations': list[Dict]}`,
  where each dictionary is a COCO object annotation. Let's add a function to reformat annotations for a single example:
 
 ```py
@@ -262,9 +254,9 @@ The `image_processor` expects the annotations to be in the following format: `{'
 
 ...     Args:
 ...         image_id (str): image id. e.g. "0001"
-...         categories (List[int]): list of categories/class labels corresponding to provided bounding boxes
-...         areas (List[float]): list of corresponding areas to provided bounding boxes
-...         bboxes (List[Tuple[float]]): list of bounding boxes provided in COCO format
+...         categories (list[int]): list of categories/class labels corresponding to provided bounding boxes
+...         areas (list[float]): list of corresponding areas to provided bounding boxes
+...         bboxes (list[tuple[float]]): list of bounding boxes provided in COCO format
 ...             ([center_x, center_y, width, height] in absolute coordinates)
 
 ...     Returns:
@@ -294,7 +286,7 @@ The `image_processor` expects the annotations to be in the following format: `{'
 Now you can combine the image and annotation transformations to use on a batch of examples:
 
 ```py
->>> def augment_and_transform_batch(examples, transform, image_processor):
+>>> def augment_and_transform_batch(examples, transform, image_processor, return_pixel_mask=False):
 ...     """Apply augmentations and format annotations in COCO format for object detection task"""
 
 ...     images = []
@@ -314,6 +306,9 @@ Now you can combine the image and annotation transformations to use on a batch o
 
 ...     # Apply the image processor transformations: resizing, rescaling, normalization
 ...     result = image_processor(images=images, annotations=annotations, return_tensors="pt")
+
+...     if not return_pixel_mask:
+...         result.pop("pixel_mask", None)
 
 ...     return result
 ```
@@ -347,7 +342,7 @@ with `pixel_values`, a tensor with `pixel_mask`, and `labels`.
           [ 0.0741,  0.0741,  0.0741,  ...,  0.0741,  0.0741,  0.0741],
           [ 0.0741,  0.0741,  0.0741,  ...,  0.0741,  0.0741,  0.0741],
           [ 0.0741,  0.0741,  0.0741,  ...,  0.0741,  0.0741,  0.0741]],
-  
+
           [[ 1.6232,  1.6408,  1.6583,  ...,  0.8704,  1.0105,  1.1331],
           [ 1.6408,  1.6583,  1.6758,  ...,  0.8529,  0.9930,  1.0980],
           [ 1.6933,  1.6933,  1.7108,  ...,  0.8179,  0.9580,  1.0630],
@@ -355,7 +350,7 @@ with `pixel_values`, a tensor with `pixel_mask`, and `labels`.
           [ 0.2052,  0.2052,  0.2052,  ...,  0.2052,  0.2052,  0.2052],
           [ 0.2052,  0.2052,  0.2052,  ...,  0.2052,  0.2052,  0.2052],
           [ 0.2052,  0.2052,  0.2052,  ...,  0.2052,  0.2052,  0.2052]],
-  
+
           [[ 1.8905,  1.9080,  1.9428,  ..., -0.1487, -0.0964, -0.0615],
           [ 1.9254,  1.9428,  1.9603,  ..., -0.1661, -0.1138, -0.0790],
           [ 1.9777,  1.9777,  1.9951,  ..., -0.2010, -0.1138, -0.0790],
@@ -404,7 +399,7 @@ Intermediate format of boxes used for training is `YOLO` (normalized) but we wil
 
 ...     Args:
 ...         boxes (torch.Tensor): Bounding boxes in YOLO format
-...         image_size (Tuple[int, int]): Image size in format (height, width)
+...         image_size (tuple[int, int]): Image size in format (height, width)
 
 ...     Returns:
 ...         torch.Tensor: Bounding boxes in Pascal VOC format (x_min, y_min, x_max, y_max)
@@ -512,6 +507,7 @@ The images in this dataset are still quite large, even after resizing. This mean
 require at least one GPU.
 
 Training involves the following steps:
+
 1. Load the model with [`AutoModelForObjectDetection`] using the same checkpoint as in the preprocessing.
 2. Define your training hyperparameters in [`TrainingArguments`].
 3. Pass the training arguments to [`Trainer`] along with the model, dataset, image processor, and data collator.
@@ -534,9 +530,10 @@ and `id2label` maps that you created earlier from the dataset's metadata. Additi
 In the [`TrainingArguments`] use `output_dir` to specify where to save your model, then configure hyperparameters as you see fit. For `num_train_epochs=30` training will take about 35 minutes in Google Colab T4 GPU, increase the number of epoch to get better results.
 
 Important notes:
- - Do not remove unused columns because this will drop the image column. Without the image column, you
+
+- Do not remove unused columns because this will drop the image column. Without the image column, you
 can't create `pixel_values`. For this reason, set `remove_unused_columns` to `False`.
- - Set `eval_do_concat_batches=False` to get proper evaluation results. Images have different number of target boxes, if batches are concatenated we will not be able to determine which boxes belongs to particular image.
+- Set `eval_do_concat_batches=False` to get proper evaluation results. Images have different number of target boxes, if batches are concatenated we will not be able to determine which boxes belongs to particular image.
 
 If you wish to share your model by pushing to the Hub, set `push_to_hub` to `True` (you must be signed in to Hugging
 Face to upload your model).
@@ -576,13 +573,14 @@ Finally, bring everything together, and call [`~transformers.Trainer.train`]:
 ...     args=training_args,
 ...     train_dataset=cppe5["train"],
 ...     eval_dataset=cppe5["validation"],
-...     tokenizer=image_processor,
+...     processing_class=image_processor,
 ...     data_collator=collate_fn,
 ...     compute_metrics=eval_compute_metrics_fn,
 ... )
 
 >>> trainer.train()
 ```
+
 <div>
 
   <progress value='3210' max='3210' style='width:300px; height:20px; vertical-align: middle;'></progress>
@@ -1485,30 +1483,20 @@ Now that you have finetuned a model, evaluated it, and uploaded it to the Huggin
 ```py
 >>> import torch
 >>> import requests
->>> import numpy as np
->>> import albumentations as A
 
->>> from PIL import Image
+>>> from PIL import Image, ImageDraw
 >>> from transformers import AutoImageProcessor, AutoModelForObjectDetection
 
 >>> url = "https://images.pexels.com/photos/8413299/pexels-photo-8413299.jpeg?auto=compress&cs=tinysrgb&w=630&h=375&dpr=2"
 >>> image = Image.open(requests.get(url, stream=True).raw)
-
->>> # Define transformations for inference
->>> resize_and_pad = A.Compose([
-...     A.LongestMaxSize(max_size=max_size),
-...     A.PadIfNeeded(max_size, max_size, border_mode=0, value=(128, 128, 128), position="top_left"),
-... ])
-
->>> # This one is for visualization with no padding
->>> resize_only = A.Compose([
-...     A.LongestMaxSize(max_size=max_size),
-... ])
 ```
 
 Load model and image processor from the Hugging Face Hub (skip to use already trained in this session):
+
 ```py
->>> device = "cuda"
+>>> from transformers import infer_device
+
+>>> device = infer_device()
 >>> model_repo = "qubvel-hf/detr_finetuned_cppe5"
 
 >>> image_processor = AutoImageProcessor.from_pretrained(model_repo)
@@ -1519,12 +1507,11 @@ Load model and image processor from the Hugging Face Hub (skip to use already tr
 And detect bounding boxes:
 
 ```py
->>> np_preprocessed_image = resize_and_pad(image=np.array(image))["image"]
 
 >>> with torch.no_grad():
-...     inputs = image_processor(images=[np_preprocessed_image], return_tensors="pt")
-...     outputs = model(inputs["pixel_values"].to(device))
-...     target_sizes = torch.tensor([np_preprocessed_image.shape[:2]])
+...     inputs = image_processor(images=[image], return_tensors="pt")
+...     outputs = model(**inputs.to(device))
+...     target_sizes = torch.tensor([[image.size[1], image.size[0]]])
 ...     results = image_processor.post_process_object_detection(outputs, threshold=0.3, target_sizes=target_sizes)[0]
 
 >>> for score, label, box in zip(results["scores"], results["labels"], results["boxes"]):
@@ -1543,9 +1530,7 @@ Detected Coverall with confidence 0.391 at location [68.61, 126.66, 309.03, 318.
 Let's plot the result:
 
 ```py
->>> resized_image = resize_only(image=np.array(image))["image"]
->>> resized_image = Image.fromarray(resized_image)
->>> draw = ImageDraw.Draw(resized_image)
+>>> draw = ImageDraw.Draw(image)
 
 >>> for score, label, box in zip(results["scores"], results["labels"], results["boxes"]):
 ...     box = [round(i, 2) for i in box.tolist()]
@@ -1553,7 +1538,7 @@ Let's plot the result:
 ...     draw.rectangle((x, y, x2, y2), outline="red", width=1)
 ...     draw.text((x, y), model.config.id2label[label.item()], fill="white")
 
->>> resized_image
+>>> image
 ```
 
 <div class="flex justify-center">

@@ -1,4 +1,3 @@
-# coding=utf-8
 # Copyright 2024 The HuggingFace Inc. team. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,8 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-""" Testing suite for the PyTorch SigLIP model. """
-
+"""Testing suite for the PyTorch SigLIP model."""
 
 import inspect
 import os
@@ -22,6 +20,7 @@ import unittest
 
 import numpy as np
 import requests
+from parameterized import parameterized
 
 from transformers import SiglipConfig, SiglipTextConfig, SiglipVisionConfig
 from transformers.testing_utils import (
@@ -30,10 +29,14 @@ from transformers.testing_utils import (
     slow,
     torch_device,
 )
-from transformers.utils import is_torch_available, is_vision_available
+from transformers.utils import (
+    is_torch_available,
+    is_vision_available,
+)
 
 from ...test_configuration_common import ConfigTester
 from ...test_modeling_common import (
+    TEST_EAGER_MATCHES_SDPA_INFERENCE_PARAMETERIZATION,
     ModelTesterMixin,
     _config_zero_init,
     floats_tensor,
@@ -49,11 +52,40 @@ if is_torch_available():
 
     from transformers import SiglipForImageClassification, SiglipModel, SiglipTextModel, SiglipVisionModel
 
-
 if is_vision_available():
     from PIL import Image
 
     from transformers import SiglipProcessor
+
+
+class SiglipModelTesterMixin(ModelTesterMixin):
+    def test_sdpa_can_dispatch_composite_models(self):
+        for model_class in self.all_model_classes:
+            config, inputs_dict = self.model_tester.prepare_config_and_inputs_for_common()
+            model = model_class(config)
+
+            with tempfile.TemporaryDirectory() as tmpdirname:
+                model.save_pretrained(tmpdirname)
+
+                # Load the model with SDPA
+                model_sdpa = model_class.from_pretrained(tmpdirname)
+
+                # Load model with eager attention
+                model_eager = model_class.from_pretrained(
+                    tmpdirname,
+                    attn_implementation="eager",
+                )
+
+            if hasattr(model_sdpa, "vision_model"):
+                self.assertTrue(model_sdpa.vision_model.config._attn_implementation == "sdpa")
+                self.assertTrue(model_eager.vision_model.config._attn_implementation == "eager")
+
+            if hasattr(model_sdpa, "text_model"):
+                self.assertTrue(model_sdpa.text_model.config._attn_implementation == "sdpa")
+                self.assertTrue(model_eager.text_model.config._attn_implementation == "eager")
+
+            self.assertTrue(model_sdpa.config._attn_implementation == "sdpa")
+            self.assertTrue(model_eager.config._attn_implementation == "eager")
 
 
 class SiglipVisionModelTester:
@@ -61,13 +93,13 @@ class SiglipVisionModelTester:
         self,
         parent,
         batch_size=12,
-        image_size=30,
+        image_size=4,
         patch_size=2,
         num_channels=3,
         is_training=True,
-        hidden_size=32,
+        hidden_size=64,
         num_hidden_layers=2,
-        num_attention_heads=4,
+        num_attention_heads=2,
         intermediate_size=37,
         dropout=0.1,
         attention_dropout=0.1,
@@ -136,7 +168,7 @@ class SiglipVisionModelTester:
 
 
 @require_torch
-class SiglipVisionModelTest(ModelTesterMixin, unittest.TestCase):
+class SiglipVisionModelTest(SiglipModelTesterMixin, unittest.TestCase):
     """
     Here we also overwrite some of the tests of test_modeling_common.py, as SIGLIP does not use input_ids, inputs_embeds,
     attention_mask and seq_length.
@@ -146,7 +178,12 @@ class SiglipVisionModelTest(ModelTesterMixin, unittest.TestCase):
     fx_compatible = False
     test_pruning = False
     test_resize_embeddings = False
-    test_head_masking = False
+    # MP works but offload doesn't work when the MultiheadAttention is offloaded
+    # TODO: One potential solution would be to add to set preload_module_classes = ["SiglipMultiheadAttentionPoolingHead"]
+    # in the dispatch_model function
+    test_cpu_offload = False
+    test_disk_offload_safetensors = False
+    test_disk_offload_bin = False
 
     def setUp(self):
         self.model_tester = SiglipVisionModelTester(self)
@@ -161,7 +198,7 @@ class SiglipVisionModelTest(ModelTesterMixin, unittest.TestCase):
     def test_inputs_embeds(self):
         pass
 
-    def test_model_common_attributes(self):
+    def test_model_get_set_embeddings(self):
         config, _ = self.model_tester.prepare_config_and_inputs_for_common()
 
         for model_class in self.all_model_classes:
@@ -202,23 +239,16 @@ class SiglipVisionModelTest(ModelTesterMixin, unittest.TestCase):
     def test_training_gradient_checkpointing_use_reentrant_false(self):
         pass
 
-    @unittest.skip(reason="SiglipVisionModel has no base class and is not available in MODEL_MAPPING")
-    def test_save_load_fast_init_from_base(self):
-        pass
-
-    @unittest.skip(reason="SiglipVisionModel has no base class and is not available in MODEL_MAPPING")
-    def test_save_load_fast_init_to_base(self):
-        pass
-
-    @unittest.skip(reason="Siglip uses the same initialization scheme as the Flax original implementation")
-    def test_initialization(self):
-        pass
-
     @slow
     def test_model_from_pretrained(self):
         model_name = "google/siglip-base-patch16-224"
         model = SiglipVisionModel.from_pretrained(model_name)
         self.assertIsNotNone(model)
+
+    @parameterized.expand(TEST_EAGER_MATCHES_SDPA_INFERENCE_PARAMETERIZATION)
+    def test_eager_matches_sdpa_inference(self, *args):
+        # adding only flaky decorator here and call the parent test method
+        return getattr(ModelTesterMixin, self._testMethodName)(self)
 
 
 class SiglipTextModelTester:
@@ -231,9 +261,9 @@ class SiglipTextModelTester:
         use_input_mask=True,
         use_labels=True,
         vocab_size=99,
-        hidden_size=32,
+        hidden_size=64,
         num_hidden_layers=2,
-        num_attention_heads=4,
+        num_attention_heads=2,
         intermediate_size=37,
         dropout=0.1,
         attention_dropout=0.1,
@@ -309,11 +339,10 @@ class SiglipTextModelTester:
 
 
 @require_torch
-class SiglipTextModelTest(ModelTesterMixin, unittest.TestCase):
+class SiglipTextModelTest(SiglipModelTesterMixin, unittest.TestCase):
     all_model_classes = (SiglipTextModel,) if is_torch_available() else ()
     fx_compatible = False
     test_pruning = False
-    test_head_masking = False
     model_split_percents = [0.5, 0.8, 0.9]
 
     # Copied from tests.models.clip.test_modeling_clip.CLIPTextModelTest.setUp with CLIP->Siglip
@@ -330,45 +359,25 @@ class SiglipTextModelTest(ModelTesterMixin, unittest.TestCase):
         config_and_inputs = self.model_tester.prepare_config_and_inputs()
         self.model_tester.create_and_check_model(*config_and_inputs)
 
-    # Copied from tests.models.clip.test_modeling_clip.CLIPTextModelTest.test_training
+    @unittest.skip(reason="SiglipTextModel does not support standalone training")
     def test_training(self):
         pass
 
-    # Copied from tests.models.clip.test_modeling_clip.CLIPTextModelTest.test_training_gradient_checkpointing
+    @unittest.skip(reason="SiglipTextModel does not support standalone training")
     def test_training_gradient_checkpointing(self):
         pass
 
-    @unittest.skip(
-        reason="This architecure seem to not compute gradients properly when using GC, check: https://github.com/huggingface/transformers/pull/27124"
-    )
-    # Copied from tests.models.clip.test_modeling_clip.CLIPTextModelTest.test_training_gradient_checkpointing_use_reentrant
+    @unittest.skip(reason="SiglipTextModel does not support standalone training")
     def test_training_gradient_checkpointing_use_reentrant(self):
         pass
 
-    @unittest.skip(
-        reason="This architecure seem to not compute gradients properly when using GC, check: https://github.com/huggingface/transformers/pull/27124"
-    )
-    # Copied from tests.models.clip.test_modeling_clip.CLIPTextModelTest.test_training_gradient_checkpointing_use_reentrant_false
+    @unittest.skip(reason="SiglipTextModel does not support standalone training")
     def test_training_gradient_checkpointing_use_reentrant_false(self):
         pass
 
     @unittest.skip(reason="Siglip does not use inputs_embeds")
     # Copied from tests.models.clip.test_modeling_clip.CLIPTextModelTest.test_inputs_embeds
     def test_inputs_embeds(self):
-        pass
-
-    @unittest.skip(reason="SiglipTextModel has no base class and is not available in MODEL_MAPPING")
-    # Copied from tests.models.clip.test_modeling_clip.CLIPTextModelTest.test_save_load_fast_init_from_base
-    def test_save_load_fast_init_from_base(self):
-        pass
-
-    @unittest.skip(reason="SiglipTextModel has no base class and is not available in MODEL_MAPPING")
-    # Copied from tests.models.clip.test_modeling_clip.CLIPTextModelTest.test_save_load_fast_init_to_base
-    def test_save_load_fast_init_to_base(self):
-        pass
-
-    @unittest.skip(reason="Siglip uses the same initialization scheme as the Flax original implementation")
-    def test_initialization(self):
         pass
 
     @slow
@@ -401,9 +410,9 @@ class SiglipModelTester:
         return config, input_ids, attention_mask, pixel_values
 
     def get_config(self):
-        return SiglipConfig.from_text_vision_configs(
-            self.text_model_tester.get_config(),
-            self.vision_model_tester.get_config(),
+        return SiglipConfig(
+            text_config=self.text_model_tester.get_config().to_dict(),
+            vision_config=self.vision_model_tester.get_config().to_dict(),
         )
 
     def create_and_check_model(self, config, input_ids, attention_mask, pixel_values):
@@ -430,18 +439,28 @@ class SiglipModelTester:
 
 
 @require_torch
-class SiglipModelTest(ModelTesterMixin, PipelineTesterMixin, unittest.TestCase):
+class SiglipModelTest(SiglipModelTesterMixin, PipelineTesterMixin, unittest.TestCase):
+    additional_model_inputs = ["pixel_values"]
     all_model_classes = (SiglipModel,) if is_torch_available() else ()
     pipeline_model_mapping = {"feature-extraction": SiglipModel} if is_torch_available() else {}
     fx_compatible = False
-    test_head_masking = False
     test_pruning = False
     test_resize_embeddings = False
     test_attention_outputs = False
+    # MP works but offload doesn't work when the MultiheadAttention is offloaded
+    # TODO: One potential solution would be to add to set preload_module_classes = ["SiglipMultiheadAttentionPoolingHead"]
+    # in the dispatch_model function
+    test_cpu_offload = False
+    test_disk_offload_safetensors = False
+    test_disk_offload_bin = False
+    _is_composite = True
 
-    # Copied from tests.models.clip.test_modeling_clip.CLIPModelTest.setUp with CLIP->Siglip
     def setUp(self):
         self.model_tester = SiglipModelTester(self)
+        self.config_tester = ConfigTester(self, config_class=SiglipConfig, has_text_modality=False)
+
+    def test_config(self):
+        self.config_tester.run_common_tests()
 
     # Copied from tests.models.clip.test_modeling_clip.CLIPModelTest.test_model
     def test_model(self):
@@ -464,34 +483,14 @@ class SiglipModelTest(ModelTesterMixin, PipelineTesterMixin, unittest.TestCase):
         pass
 
     @unittest.skip(reason="SiglipModel does not have input/output embeddings")
-    # Copied from tests.models.clip.test_modeling_clip.CLIPModelTest.test_model_common_attributes
-    def test_model_common_attributes(self):
-        pass
-
-    @unittest.skip(reason="SiglipModel does not support training")
-    def test_training(self):
-        pass
-
-    @unittest.skip(reason="SiglipModel does not support training")
-    def test_training_gradient_checkpointing(self):
-        pass
-
-    @unittest.skip(reason="SiglipModel does not support training")
-    def test_training_gradient_checkpointing_use_reentrant(self):
-        pass
-
-    @unittest.skip(reason="SiglipModel does not support training")
-    def test_training_gradient_checkpointing_use_reentrant_false(self):
-        pass
-
-    @unittest.skip(reason="Siglip uses the same initialization scheme as the Flax original implementation")
-    def test_initialization(self):
+    # Copied from tests.models.clip.test_modeling_clip.CLIPModelTest.test_model_get_set_embeddings
+    def test_model_get_set_embeddings(self):
         pass
 
     # Copied from tests.models.clip.test_modeling_clip.CLIPModelTest._create_and_check_torchscript with CLIP->Siglip
     def _create_and_check_torchscript(self, config, inputs_dict):
         if not self.test_torchscript:
-            return
+            self.skipTest(reason="test_torchscript is set to False")
 
         configs_no_init = _config_zero_init(config)  # To be sure we have no Nan
         configs_no_init.torchscript = True
@@ -531,8 +530,8 @@ class SiglipModelTest(ModelTesterMixin, PipelineTesterMixin, unittest.TestCase):
             loaded_model_state_dict = loaded_model.state_dict()
 
             non_persistent_buffers = {}
-            for key in loaded_model_state_dict.keys():
-                if key not in model_state_dict.keys():
+            for key in loaded_model_state_dict:
+                if key not in model_state_dict:
                     non_persistent_buffers[key] = loaded_model_state_dict[key]
 
             loaded_model_state_dict = {
@@ -605,14 +604,20 @@ class SiglipForImageClassificationModelTester(SiglipModelTester):
 
 
 @require_torch
-class SiglipForImageClassificationModelTest(ModelTesterMixin, PipelineTesterMixin, unittest.TestCase):
+class SiglipForImageClassificationModelTest(SiglipModelTesterMixin, PipelineTesterMixin, unittest.TestCase):
     all_model_classes = (SiglipForImageClassification,) if is_torch_available() else ()
     pipeline_model_mapping = {"image-classification": SiglipForImageClassification} if is_torch_available() else {}
     fx_compatible = False
-    test_head_masking = False
     test_pruning = False
     test_resize_embeddings = False
     test_attention_outputs = False
+    # MP works but offload doesn't work when the MultiheadAttention is offloaded
+    # TODO: One potential solution would be to add to set preload_module_classes = ["SiglipMultiheadAttentionPoolingHead"]
+    # in the dispatch_model function
+    test_cpu_offload = False
+    test_disk_offload_safetensors = False
+    test_disk_offload_bin = False
+    _is_composite = True
 
     def setUp(self):
         self.model_tester = SiglipForImageClassificationModelTester(self)
@@ -622,7 +627,7 @@ class SiglipForImageClassificationModelTest(ModelTesterMixin, PipelineTesterMixi
         pass
 
     @unittest.skip(reason="SiglipForImageClassification does not support inputs_embeds")
-    def test_model_common_attributes(self):
+    def test_model_get_set_embeddings(self):
         pass
 
     @unittest.skip(reason="SiglipForImageClassification does not support gradient checkpointing yet")
@@ -635,10 +640,6 @@ class SiglipForImageClassificationModelTest(ModelTesterMixin, PipelineTesterMixi
 
     @unittest.skip(reason="SiglipForImageClassification does not support gradient checkpointing yet")
     def test_training_gradient_checkpointing_use_reentrant_false(self):
-        pass
-
-    @unittest.skip(reason="Siglip uses the same initialization scheme as the Flax original implementation")
-    def test_initialization(self):
         pass
 
 
@@ -681,12 +682,12 @@ class SiglipModelIntegrationTest(unittest.TestCase):
 
         expected_logits = torch.tensor([[-0.7567, -10.3354]], device=torch_device)
 
-        self.assertTrue(torch.allclose(outputs.logits_per_image, expected_logits, atol=1e-3))
+        torch.testing.assert_close(outputs.logits_per_image, expected_logits, rtol=1e-3, atol=1e-3)
 
         # verify the probs
         probs = torch.sigmoid(logits_per_image)  # these are the probabilities
         expected_probs = torch.tensor([[3.1937e-01, 3.2463e-05]], device=torch_device)
-        self.assertTrue(torch.allclose(probs, expected_probs, atol=1e-3))
+        torch.testing.assert_close(probs, expected_probs, rtol=1e-3, atol=1e-3)
 
     @slow
     def test_inference_interpolate_pos_encoding(self):

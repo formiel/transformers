@@ -14,7 +14,7 @@
 # limitations under the License.
 """PatchTST model configuration"""
 
-from typing import List, Optional, Union
+from typing import Optional, Union
 
 from transformers.configuration_utils import PretrainedConfig
 from transformers.utils import logging
@@ -67,8 +67,6 @@ class PatchTSTConfig(PretrainedConfig):
             A value added to the denominator for numerical stability of normalization.
         attention_dropout (`float`, *optional*, defaults to 0.0):
             The dropout probability for the attention probabilities.
-        dropout (`float`, *optional*, defaults to 0.0):
-            The dropout probability for all fully connected layers in the Transformer.
         positional_dropout (`float`, *optional*, defaults to 0.0):
             The dropout probability in the positional embedding layer.
         path_dropout (`float`, *optional*, defaults to 0.0):
@@ -167,7 +165,6 @@ class PatchTSTConfig(PretrainedConfig):
         norm_type: str = "batchnorm",
         norm_eps: float = 1e-05,
         attention_dropout: float = 0.0,
-        dropout: float = 0.0,
         positional_dropout: float = 0.0,
         path_dropout: float = 0.0,
         ff_dropout: float = 0.0,
@@ -183,16 +180,16 @@ class PatchTSTConfig(PretrainedConfig):
         do_mask_input: Optional[bool] = None,
         mask_type: str = "random",
         random_mask_ratio: float = 0.5,
-        num_forecast_mask_patches: Optional[Union[List[int], int]] = [2],
+        num_forecast_mask_patches: Optional[Union[list[int], int]] = [2],
         channel_consistent_masking: Optional[bool] = False,
-        unmasked_channel_indices: Optional[List[int]] = None,
+        unmasked_channel_indices: Optional[list[int]] = None,
         mask_value: int = 0,
         # head
         pooling_type: str = "mean",
         head_dropout: float = 0.0,
         prediction_length: int = 24,
         num_targets: int = 1,
-        output_range: Optional[List] = None,
+        output_range: Optional[list] = None,
         # distribution head
         num_parallel_samples: int = 100,
         **kwargs,
@@ -209,7 +206,6 @@ class PatchTSTConfig(PretrainedConfig):
         self.num_attention_heads = num_attention_heads
         self.ffn_dim = ffn_dim
         self.num_hidden_layers = num_hidden_layers
-        self.dropout = dropout
         self.attention_dropout = attention_dropout
         self.share_embedding = share_embedding
         self.channel_attention = channel_attention
@@ -255,3 +251,6 @@ class PatchTSTConfig(PretrainedConfig):
         self.output_range = output_range
 
         super().__init__(**kwargs)
+
+
+__all__ = ["PatchTSTConfig"]

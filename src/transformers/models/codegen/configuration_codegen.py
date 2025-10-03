@@ -12,11 +12,13 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-""" CodeGen model configuration"""
-from collections import OrderedDict
-from typing import Any, List, Mapping, Optional
+"""CodeGen model configuration"""
 
-from ... import PreTrainedTokenizer, TensorType, is_torch_available
+from collections import OrderedDict
+from collections.abc import Mapping
+from typing import Any, Optional
+
+from ... import PreTrainedTokenizer, is_torch_available
 from ...configuration_utils import PretrainedConfig
 from ...onnx import OnnxConfigWithPast, PatchingSpec
 from ...utils import logging
@@ -144,13 +146,13 @@ class CodeGenConfig(PretrainedConfig):
         )
 
 
-# Copied from transformers.models.gpt2.configuration_gpt2.GPT2OnnxConfig
+# Copied from transformers.models.gpt2.configuration_gpt2.GPT2OnnxConfig with GPT2->CodeGen
 class CodeGenOnnxConfig(OnnxConfigWithPast):
     def __init__(
         self,
         config: PretrainedConfig,
         task: str = "default",
-        patching_specs: List[PatchingSpec] = None,
+        patching_specs: Optional[list[PatchingSpec]] = None,
         use_past: bool = False,
     ):
         super().__init__(config, task=task, patching_specs=patching_specs, use_past=use_past)
@@ -183,10 +185,9 @@ class CodeGenOnnxConfig(OnnxConfigWithPast):
         batch_size: int = -1,
         seq_length: int = -1,
         is_pair: bool = False,
-        framework: Optional[TensorType] = None,
     ) -> Mapping[str, Any]:
         common_inputs = super(OnnxConfigWithPast, self).generate_dummy_inputs(
-            tokenizer, batch_size=batch_size, seq_length=seq_length, is_pair=is_pair, framework=framework
+            tokenizer, batch_size=batch_size, seq_length=seq_length, is_pair=is_pair
         )
 
         # We need to order the input in the way they appears in the forward()
@@ -224,3 +225,6 @@ class CodeGenOnnxConfig(OnnxConfigWithPast):
     @property
     def default_onnx_opset(self) -> int:
         return 13
+
+
+__all__ = ["CodeGenConfig", "CodeGenOnnxConfig"]
