@@ -103,23 +103,10 @@ def convert_data2vec2_checkpoint(args):
         assert pretrained_args is not None
         pretrained_args.criterion = None
         pretrained_args.lr_scheduler = None
-        # pretrained_args.task.data = "/lus/work/CT10/c1615074/tphle/Data/prepared/Wikipedia/frwiki_20190701/data-bin/byteBPE"
 
         task = tasks.setup_task(pretrained_args.task, from_checkpoint=True)
         model_config["modalities"]["text"]["vocab_size"] = len(task.source_dictionary)
         print(f"Vocab size: {len(task.source_dictionary)}")
-
-        # tokenizer = ByteLevelBPETokenizer(
-        #     f"{args.vocab_dir}/{args.vocab_name}-vocab.json",
-        #     f"{args.vocab_dir}/{args.vocab_name}-merges.txt",
-        #     add_prefix_space=False,
-        #     unicode_normalizer="nfc",
-        # )
-        # tokenizer.add_special_tokens(SPECIAL_TOKENS)
-        # model_config["unk_token_id"] = UNK_TOKEN_ID
-        # model_config["bos_token_id"] = BOS_TOKEN_ID
-        # model_config["eos_token_id"] = EOS_TOKEN_ID
-        # model_config["pad_token_id"] = PAD_TOKEN_ID
 
     # configuration
     configuration = Data2Vec2MultiConfig()
@@ -167,9 +154,6 @@ def test_converted_weights(args):
     assert pretrained_args is not None
     pretrained_args.criterion = None
     pretrained_args.lr_scheduler = None
-    # print(f"pretrained_args.data: {pretrained_args.data}")
-    # if args.vocab_dir is not None:
-    #     pretrained_args.task.data = "/lus/work/CT10/c1615074/tphle/Data/prepared/Wikipedia/frwiki_20190701/data-bin/byteBPE"
 
     task = tasks.setup_task(pretrained_args.task, from_checkpoint=True)
     print(f"fairseq model args: {pretrained_args.model}")
@@ -190,30 +174,8 @@ def test_converted_weights(args):
         )
         
         print(f"Comparing outputs for SAMPLE TEXT: {SAMPLE_TEXT}")
-        # tokenizer = ByteLevelBPETokenizer(
-        #     f"{args.vocab_dir}/{args.vocab_name}-vocab.json",
-        #     f"{args.vocab_dir}/{args.vocab_name}-merges.txt",
-        #     add_prefix_space=False,
-        #     unicode_normalizer="nfc",
-        # )
-        # tokenizer.add_special_tokens(SPECIAL_TOKENS)
-        # print(f'unk_token_id: {tokenizer.token_to_id(UNK_TOKEN)}')
-        # print(f'bos_token_id: {tokenizer.token_to_id(BOS_TOKEN)}')
-        # print(f'eos_token_id: {tokenizer.token_to_id(EOS_TOKEN)}')
-        # print(f'pad_token_id: {tokenizer.token_to_id(PAD_TOKEN)}')
-
-        # encoded = tokenizer.encode(SAMPLE_TEXT)
-        # encoded_ids = [BOS_TOKEN_ID] + encoded.ids # need to prepend BOS token <s>
-        # print(f"encoded.ids: {encoded.ids}")
-
-        if not args.use_bpe:
-            tokenizer = RobertaTokenizerFast.from_pretrained(
-                args.vocab_dir, add_prefix_space=False, unicode_normalizer="nfc"
-            )
-            encoded_ids = tokenizer(SAMPLE_TEXT)["input_ids"]
-        else:
-            tokenizer = AutoTokenizer.from_pretrained(args.vocab_dir)
-            encoded_ids = tokenizer.encode(SAMPLE_TEXT)
+        tokenizer = AutoTokenizer.from_pretrained(args.vocab_dir)
+        encoded_ids = tokenizer.encode(SAMPLE_TEXT)
         print(f'encoded_ids: {encoded_ids}')
         input_values = torch.tensor(
             encoded_ids, dtype=torch.int64
@@ -237,11 +199,8 @@ if __name__ == "__main__":
     parser.add_argument("--checkpoint_path", default=None, type=str, help="Path to fairseq checkpoint")
     parser.add_argument("--user-dir", default="examples/data2vec")
     parser.add_argument("--vocab-dir", default=None)
-    parser.add_argument("--vocab-name", default="bpe-bytelevel", type=str)
     parser.add_argument("--do_convert", action="store_true")
     parser.add_argument("--do_test", action="store_true")
-    parser.add_argument("--use_bpe", action="store_true",
-                        help="BPE tokenizer instead of ByteLevelBPE")
     args = parser.parse_args()
 
     if args.do_convert:
