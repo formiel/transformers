@@ -25,10 +25,10 @@
 
 import os
 from typing import Union, Dict, Any, Optional
-from ...dynamic_module_utils import custom_object_save
-from ...utils import CONFIG_NAME
-from ...configuration_utils import PretrainedConfig
-from ...utils import logging
+from transformers.dynamic_module_utils import custom_object_save
+from transformers.utils import CONFIG_NAME
+from transformers import PretrainedConfig
+from transformers import logging
 
 
 logger = logging.get_logger(__name__)
@@ -72,7 +72,7 @@ class MyPretrainedConfig(PretrainedConfig):
             raise AssertionError(f"Provided path ({save_directory}) should be a directory, not a file")
 
         non_default_generation_parameters = {}
-        for parameter_name, default_value in self._get_generation_defaults().items():
+        for parameter_name, default_value in self._get_global_generation_defaults().items():
             if hasattr(self, parameter_name) and getattr(self, parameter_name) != default_value:
                 non_default_generation_parameters[parameter_name] = getattr(self, parameter_name)
         if len(non_default_generation_parameters) > 0:

@@ -31,15 +31,15 @@ import numpy as np
 
 from torch import nn
 
-from ...modeling_utils import PreTrainedModel
-from ...modeling_outputs import (
+from transformers import PreTrainedModel
+from transformers.modeling_outputs import (
     Wav2Vec2BaseModelOutput,
 )
-from .configuration_data2vec2_multi import (
+from configuration_data2vec2 import (
     Data2Vec2MultiConfig,
     D2v2ModalityConfig,
 )
-from .modeling_data2vec2_base import (
+from modeling_data2vec2_base import (
     ModalitySpecificEncoder,
     AudioEncoder,
     TextEncoder,

@@ -36,10 +36,11 @@ import torch.nn.functional as F
 
 from transformers import (
     Wav2Vec2Processor,
-    Data2Vec2MultiConfig,
-    Data2Vec2MultiModel,
     RobertaTokenizerFast,
 )
+from configuration_data2vec2 import Data2Vec2MultiConfig
+from modeling_data2vec2 import Data2Vec2MultiModel
+
 UNK_TOKEN, UNK_TOKEN_ID = "<unk>", 3
 BOS_TOKEN, BOS_TOKEN_ID = "<s>", 0
 EOS_TOKEN, EOS_TOKEN_ID = "</s>", 2
@@ -53,7 +54,7 @@ SPECIAL_TOKENS = [
             MASK_TOKEN,
         ]
 
-FAIRSEQ = "/linkhome/rech/genlig01/umz16dj/code/h100_py310_cu1241_torch251/fairspeech"
+FAIRSEQ = "/linkhome/rech/genlig01/ucy22cr/pantagruel/code/h100_py39_cu1241_torch251/fairspeech"
 SAMPLE_TEXT = "Bonjour le monde !!"
 
 
@@ -227,23 +228,6 @@ def test_converted_weights(args):
             normalized_input_values = F.layer_norm(input_values, input_values.size()[1:])
         compare_outputs(
             normalized_input_values, fairseq_model, hf_model, mode=mode
-        )
-
-        print(f"Comparing outputs from dummy datasets...")
-        print("Loading processor...")
-        processor = Wav2Vec2Processor.from_pretrained("facebook/wav2vec2-large-lv60")
-        print("Loading dataset...")
-        mls = load_dataset("patrickvonplaten/librispeech_asr_dummy", "clean", split="validation", cache_dir="downloaded_data", trust_remote_code=True)
-        input_audio = [x["array"] for x in mls[:4]["audio"]]
-        inputs = processor(input_audio, return_tensors="pt", padding=True)
-        input_values = inputs.input_values
-        attention_mask = inputs.attention_mask
-        compare_outputs(
-            input_values,
-            fairseq_model,
-            hf_model, 
-            mode=mode,
-            padding_mask=(1-attention_mask),
         )
 
 

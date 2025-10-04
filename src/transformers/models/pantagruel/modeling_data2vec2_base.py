@@ -32,12 +32,12 @@ import torch.nn.functional as F
 from torch import nn
 from torch import Tensor
 
-from .configuration_data2vec2_multi import (
+from configuration_data2vec2 import (
     D2v2ModalityConfig,
     D2v2AudioConfig,
     D2v2TextConfig,
 )
-from .utils import (
+from utils import (
     _learned_alibi_bias,
     gather_unmasked,
     gather_unmasked_mask,
