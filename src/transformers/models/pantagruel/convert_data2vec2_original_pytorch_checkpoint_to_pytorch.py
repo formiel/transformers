@@ -173,10 +173,32 @@ def test_converted_weights(args):
             input_values, fairseq_model, hf_model, mode=mode
         )
         
-        print(f"Comparing outputs for SAMPLE TEXT: {SAMPLE_TEXT}")
-        tokenizer = AutoTokenizer.from_pretrained(args.vocab_dir)
-        encoded_ids = tokenizer.encode(SAMPLE_TEXT)
-        print(f'encoded_ids: {encoded_ids}')
+        print(f"Comparing outputs for SAMPLE TEXT...")
+        if not args.use_bytebpe:
+            tokenizer = AutoTokenizer.from_pretrained(args.vocab_dir)
+            encoded_ids = tokenizer.encode(SAMPLE_TEXT)
+        else:
+            from tokenizers import ByteLevelBPETokenizer
+            print(f"Using ByteBPE tokenizer...")
+            tokenizer = ByteLevelBPETokenizer(
+                f"{args.vocab_dir}/bpe-bytelevel-vocab.json",
+                f"{args.vocab_dir}/bpe-bytelevel-merges.txt",
+                add_prefix_space=False,
+                unicode_normalizer="nfc",
+            )
+            tokenizer.add_special_tokens(SPECIAL_TOKENS)
+            encoded_ids = tokenizer.encode(SAMPLE_TEXT).ids
+
+        print(f'{SAMPLE_TEXT}: {encoded_ids}')
+        # Save tokenizers v0.22.1
+        # add post processors
+        from tokenizers import processors
+        tokenizer.post_processor = processors.TemplateProcessing(
+            single=f"{BOS_TOKEN}:0 $A:0 {EOS_TOKEN}:0",
+            pair=f"{BOS_TOKEN}:0 $A:0 {EOS_TOKEN}:0 $B:1 {EOS_TOKEN}:1",
+        )
+        tokenizer.save_pretrained(args.pytorch_dump_folder_path)
+        
         input_values = torch.tensor(
             encoded_ids, dtype=torch.int64
         ).unsqueeze(0)
@@ -201,6 +223,8 @@ if __name__ == "__main__":
     parser.add_argument("--vocab-dir", default=None)
     parser.add_argument("--do_convert", action="store_true")
     parser.add_argument("--do_test", action="store_true")
+    parser.add_argument("--use_bytebpe", action="store_true",
+                        help="for converting vocabulary learned with ByteBPE")
     args = parser.parse_args()
 
     if args.do_convert:
