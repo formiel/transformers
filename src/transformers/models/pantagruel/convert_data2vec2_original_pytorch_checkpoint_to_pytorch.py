@@ -178,26 +178,39 @@ def test_converted_weights(args):
             tokenizer = AutoTokenizer.from_pretrained(args.vocab_dir)
             encoded_ids = tokenizer.encode(SAMPLE_TEXT)
         else:
-            from tokenizers import ByteLevelBPETokenizer
-            print(f"Using ByteBPE tokenizer...")
-            tokenizer = ByteLevelBPETokenizer(
-                f"{args.vocab_dir}/bpe-bytelevel-vocab.json",
-                f"{args.vocab_dir}/bpe-bytelevel-merges.txt",
-                add_prefix_space=False,
-                unicode_normalizer="nfc",
-            )
-            tokenizer.add_special_tokens(SPECIAL_TOKENS)
-            encoded_ids = tokenizer.encode(SAMPLE_TEXT).ids
+            from transformers import RobertaTokenizerFast
+            # Text_Base_fr_4GB_v0
+            tokenizer = RobertaTokenizerFast(
+                    vocab_file=f"{args.vocab_dir}/bpe-bytelevel-vocab.json",
+                    merges_file=f"{args.vocab_dir}/bpe-bytelevel-merges.txt",
+                    bos_token=BOS_TOKEN,
+                    eos_token=EOS_TOKEN,
+                    cls_token=BOS_TOKEN,
+                    sep_token=EOS_TOKEN,
+                    pad_token=PAD_TOKEN,
+                    unk_token=UNK_TOKEN,
+                    mask_token=MASK_TOKEN
+                )
+            encoded_ids = tokenizer.encode(SAMPLE_TEXT)
 
         print(f'{SAMPLE_TEXT}: {encoded_ids}')
-        # Save tokenizers v0.22.1
+
         # add post processors
-        from tokenizers import processors
-        tokenizer.post_processor = processors.TemplateProcessing(
-            single=f"{BOS_TOKEN}:0 $A:0 {EOS_TOKEN}:0",
-            pair=f"{BOS_TOKEN}:0 $A:0 {EOS_TOKEN}:0 $B:1 {EOS_TOKEN}:1",
-        )
+        if "camembert" not in args.vocab_dir:
+            from tokenizers import processors
+            tokenizer.post_processor = processors.TemplateProcessing(
+                single=f"{BOS_TOKEN}:0 $A:0 {EOS_TOKEN}:0",
+                pair=f"{BOS_TOKEN}:0 $A:0 {EOS_TOKEN}:0 $B:1 {EOS_TOKEN}:1",
+                special_tokens=[
+                    (BOS_TOKEN, BOS_TOKEN_ID),
+                    (EOS_TOKEN, EOS_TOKEN_ID),
+                ],
+            )
+        else:
+            print("No need to add post processor for camembert")
+        # Save tokenizers v0.22.1
         tokenizer.save_pretrained(args.pytorch_dump_folder_path)
+        print(f"TOKENIZER: {tokenizer}")
         
         input_values = torch.tensor(
             encoded_ids, dtype=torch.int64
