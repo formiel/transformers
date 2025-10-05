@@ -34,10 +34,6 @@ from transformers import AutoTokenizer
 
 import torch.nn.functional as F
 
-from transformers import (
-    Wav2Vec2Processor,
-    RobertaTokenizerFast,
-)
 from configuration_data2vec2 import Data2Vec2MultiConfig
 from modeling_data2vec2 import Data2Vec2MultiModel
 
