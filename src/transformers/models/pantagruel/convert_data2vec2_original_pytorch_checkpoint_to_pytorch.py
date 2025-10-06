@@ -20,7 +20,7 @@
 # limitations under the License.
 """Convert data2vec 2 checkpoint."""
 
-import os
+import os, shutil
 import argparse
 
 import torch
@@ -30,12 +30,13 @@ from fairseq import utils
 from fairseq import checkpoint_utils
 
 from datasets import load_dataset
-from transformers import AutoTokenizer
+from transformers import AutoTokenizer, AutoConfig, AutoModel, PreTrainedTokenizerFast
+from tokenizers import AddedToken, Tokenizer
 
 import torch.nn.functional as F
 
-from configuration_data2vec2 import Data2Vec2MultiConfig
-from modeling_data2vec2 import Data2Vec2MultiModel
+from .configuration_data2vec2 import Data2Vec2MultiConfig
+from .modeling_data2vec2 import Data2Vec2MultiModel
 
 UNK_TOKEN, UNK_TOKEN_ID = "<unk>", 3
 BOS_TOKEN, BOS_TOKEN_ID = "<s>", 0
@@ -107,6 +108,14 @@ def convert_data2vec2_checkpoint(args):
     # configuration
     configuration = Data2Vec2MultiConfig()
     configuration.update(model_config)
+    # configuration.auto_map = {
+    #     'AutoConfig': 'configuration_data2vec2.Data2Vec2MultiConfig',
+    #     'AutoModel': 'modeling_data2vec2.Data2Vec2MultiModel',
+    # }
+    AutoConfig.register("data2vec2", Data2Vec2MultiConfig)
+    Data2Vec2MultiConfig.register_for_auto_class("AutoConfig")
+    configuration.save_pretrained(pytorch_dump_folder_path)
+    print(f"Configuration: {configuration}")
 
     # pre-trained weights
     hf_model = Data2Vec2MultiModel(configuration)
@@ -115,10 +124,12 @@ def convert_data2vec2_checkpoint(args):
         if "ema" in k or "decoder" in k:
             del state_dict[k]
     hf_model.load_state_dict(state_dict, strict=True)
+    AutoModel.register(Data2Vec2MultiConfig, Data2Vec2MultiModel)
+    Data2Vec2MultiModel.register_for_auto_class("AutoModel")
 
     # saving pretrained model and configuration
     print(f"Saving pre-trained configuration and pre-trained weights...")
-    hf_model.save_pretrained(pytorch_dump_folder_path, safe_serialization=False)
+    hf_model.save_pretrained(pytorch_dump_folder_path)
 
     # comparing with fairseq state dict
     print("Loading from pretrained folder ...")
@@ -171,8 +182,46 @@ def test_converted_weights(args):
         
         print(f"Comparing outputs for SAMPLE TEXT...")
         if not args.use_bytebpe:
-            tokenizer = AutoTokenizer.from_pretrained(args.vocab_dir)
-            encoded_ids = tokenizer.encode(SAMPLE_TEXT)
+            TMP_TOK_DIR = "/lustre/fsn1/projects/rech/oou/ucy22cr/tmp"
+            TMP_TOK_FNAME = "tokenizer_added_post_processor"
+            # load using Tokenizer to add post processor
+            tokenizer = Tokenizer.from_file(f"{args.vocab_dir}/tokenizer.json")
+            # add post processors
+            if args.add_post_processor:
+                from tokenizers import processors
+                tokenizer.post_processor = processors.TemplateProcessing(
+                    single=f"{BOS_TOKEN} $0 {EOS_TOKEN}",
+                    special_tokens=[
+                        (BOS_TOKEN, BOS_TOKEN_ID),
+                        (EOS_TOKEN, EOS_TOKEN_ID),
+                    ],
+                )
+            tokenizer.save(f"{TMP_TOK_DIR}/{TMP_TOK_FNAME}.json")
+
+            # save using PreTrainedTokenizerFast
+            tok = PreTrainedTokenizerFast(tokenizer_file=f"{TMP_TOK_DIR}/{TMP_TOK_FNAME}.json")
+            tok.save_pretrained(f"{TMP_TOK_DIR}/{TMP_TOK_FNAME}")
+            os.remove(f"{TMP_TOK_DIR}/{TMP_TOK_FNAME}.json")
+
+            # load using AutoTokenizer to add special tokens
+            tokenizer = AutoTokenizer.from_pretrained(
+                f"{TMP_TOK_DIR}/{TMP_TOK_FNAME}"
+            )
+            special_tokens_dict = {
+                "bos_token": AddedToken(BOS_TOKEN, normalized=True),
+                "cls_token": AddedToken(BOS_TOKEN, normalized=True),
+                "eos_token": AddedToken(EOS_TOKEN, normalized=True),
+                "sep_token": AddedToken(EOS_TOKEN, normalized=True),
+                "pad_token": AddedToken(PAD_TOKEN, normalized=True),
+                "mask_token": AddedToken(MASK_TOKEN, normalized=True),
+                "unk_token": AddedToken(UNK_TOKEN, normalized=True),
+            }
+            tokenizer.add_special_tokens(special_tokens_dict)
+            for token in SPECIAL_TOKENS:
+                print(f"{token}: {tokenizer.convert_tokens_to_ids(token)}")
+
+            shutil.rmtree(f"{TMP_TOK_DIR}/{TMP_TOK_FNAME}")
+            print(f"TOKENIZER: {tokenizer}")
         else:
             from transformers import RobertaTokenizerFast
             # Text_Base_fr_4GB_v0
@@ -187,26 +236,9 @@ def test_converted_weights(args):
                     unk_token=UNK_TOKEN,
                     mask_token=MASK_TOKEN
                 )
-            encoded_ids = tokenizer.encode(SAMPLE_TEXT)
-
+        tokenizer.save_pretrained(f"{args.pytorch_dump_folder_path}")
+        encoded_ids = tokenizer.encode(SAMPLE_TEXT)
         print(f'{SAMPLE_TEXT}: {encoded_ids}')
-
-        # add post processors
-        if "camembert" not in args.vocab_dir:
-            from tokenizers import processors
-            tokenizer.post_processor = processors.TemplateProcessing(
-                single=f"{BOS_TOKEN}:0 $A:0 {EOS_TOKEN}:0",
-                pair=f"{BOS_TOKEN}:0 $A:0 {EOS_TOKEN}:0 $B:1 {EOS_TOKEN}:1",
-                special_tokens=[
-                    (BOS_TOKEN, BOS_TOKEN_ID),
-                    (EOS_TOKEN, EOS_TOKEN_ID),
-                ],
-            )
-        else:
-            print("No need to add post processor for camembert")
-        # Save tokenizers v0.22.1
-        tokenizer.save_pretrained(args.pytorch_dump_folder_path)
-        print(f"TOKENIZER: {tokenizer}")
         
         input_values = torch.tensor(
             encoded_ids, dtype=torch.int64
@@ -234,6 +266,7 @@ if __name__ == "__main__":
     parser.add_argument("--do_test", action="store_true")
     parser.add_argument("--use_bytebpe", action="store_true",
                         help="for converting vocabulary learned with ByteBPE")
+    parser.add_argument("--add_post_processor", action="store_true")
     args = parser.parse_args()
 
     if args.do_convert:

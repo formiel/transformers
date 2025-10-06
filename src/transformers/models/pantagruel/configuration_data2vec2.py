@@ -26,9 +26,8 @@
 import os
 from typing import Union, Dict, Any, Optional
 from transformers.dynamic_module_utils import custom_object_save
-from transformers.utils import CONFIG_NAME
-from transformers import PretrainedConfig
-from transformers import logging
+from transformers.utils import logging
+from transformers.configuration_utils import PretrainedConfig, CONFIG_NAME
 
 
 logger = logging.get_logger(__name__)
@@ -352,7 +351,7 @@ class Data2Vec2MultiConfig(MyPretrainedConfig):
     >>> configuration = model.config
     ```"""
 
-    model_type = "data2vec2-multi"
+    model_type = "data2vec2"
 
     def __init__(
         self,
@@ -409,3 +408,8 @@ class Data2Vec2MultiConfig(MyPretrainedConfig):
         self.num_layers = depth
         self.n_layers = depth
         self.num_hidden_layers = depth
+
+        self.auto_map = {
+            'AutoConfig': 'configuration_data2vec2.Data2Vec2MultiConfig',
+            'AutoModel': 'modeling_data2vec2.Data2Vec2MultiModel',
+        }
