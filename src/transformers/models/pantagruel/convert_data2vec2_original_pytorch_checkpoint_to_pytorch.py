@@ -51,7 +51,7 @@ SPECIAL_TOKENS = [
             MASK_TOKEN,
         ]
 
-FAIRSEQ = "/linkhome/rech/genlig01/ucy22cr/pantagruel/code/h100_py39_cu1241_torch251/fairspeech"
+FAIRSEQ = os.environ["FAIRSEQ"]
 SAMPLE_TEXT = "Bonjour le monde !!"
 
 
@@ -182,7 +182,7 @@ def test_converted_weights(args):
         
         print(f"Comparing outputs for SAMPLE TEXT...")
         if not args.use_bytebpe:
-            TMP_TOK_DIR = "/lustre/fsn1/projects/rech/oou/ucy22cr/tmp"
+            TMP_TOK_DIR = os.environ["TMPDIR"]
             TMP_TOK_FNAME = "tokenizer_added_post_processor"
             # load using Tokenizer to add post processor
             tokenizer = Tokenizer.from_file(f"{args.vocab_dir}/tokenizer.json")
